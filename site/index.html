@@ -12,16 +12,34 @@
     .mark { color: #54815d; font-size: .8rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     h1 { margin: .6rem 0 1rem; font-size: clamp(1.7rem, 5vw, 2.4rem); }
     p { line-height: 1.7; color: #59645c; }
-    .status { display: inline-flex; align-items: center; gap: .55rem; margin-top: 1rem; padding: .55rem .85rem; border-radius: 2rem; background: #eef5eb; color: #335b39; font-size: .9rem; }
+    .status { display: inline-flex; align-items: center; gap: .55rem; margin: .8rem 0; padding: .55rem .85rem; border-radius: 2rem; background: #eef5eb; color: #335b39; font-size: .9rem; }
     .dot { width: .55rem; height: .55rem; border-radius: 50%; background: #76a56f; }
+    a { color: #315f39; }
+    .note { padding-top: 1rem; border-top: 1px solid #e6ebe6; font-size: .92rem; }
   </style>
 </head>
 <body>
   <main>
     <div class="mark">Coffee Operations</div>
     <h1>Coffee Bed Dashboard</h1>
-    <p>コーヒーベッドのダッシュボードを準備しています。運用データはまだ公開していません。</p>
-    <div class="status"><span class="dot" aria-hidden="true"></span>プロジェクト準備中</div>
+    <p>Shahの乾燥記録CSVを読み取り専用で公開しています。ダッシュボード本体はこれから実装します。</p>
+    <div class="status"><span class="dot" aria-hidden="true"></span><span id="status">CSVを確認しています…</span></div>
+    <p><a href="./data/shah-drying-records.csv">Shah乾燥記録CSVを開く</a></p>
+    <p class="note">このデータは2026-10-03時点のスナップショットです。自動同期ではありません。元ファイルにベッド占有率(%)はないため、空欄のままです。CSVは読み取り専用です。</p>
   </main>
+  <script>
+    fetch('./data/shah-drying-records.csv', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error('CSV could not be read');
+        return response.text();
+      })
+      .then((text) => {
+        const count = Math.max(0, text.trim().split(/\r?\n/).length - 1);
+        document.getElementById('status').textContent = `Shah記録 ${count}件 — 読み取り専用`;
+      })
+      .catch(() => {
+        document.getElementById('status').textContent = 'CSVを読み込めません';
+      });
+  </script>
 </body>
 </html>
