@@ -3,6 +3,7 @@ import {
   AGE_ORANGE_MAX,
   BED_COUNT,
   CURRENT_STATUS_URL,
+  CURRENT_STATUS_SHEET_URL,
   DRYING_DAYS,
   MOISTURE_TARGET,
   OCCUPANCY_ALERT,
@@ -549,8 +550,17 @@ function renderDataAlert() {
 }
 
 function updateSourceLinks() {
-  const href = appState.live ? CURRENT_STATUS_URL : './data/shah-drying-records.csv';
-  document.querySelectorAll('.source-link, .text-link').forEach((link) => { link.href = href; });
+  const href = appState.live ? CURRENT_STATUS_SHEET_URL : './data/shah-drying-records.csv';
+  document.querySelectorAll('.source-link, .text-link').forEach((link) => {
+    link.href = href;
+    if (appState.live) { link.target = '_blank'; link.rel = 'noopener'; }
+    else { link.removeAttribute('target'); link.removeAttribute('rel'); }
+    const label = link.querySelector('[data-i18n]');
+    if (label) label.dataset.i18n = link.classList.contains('source-link')
+      ? (appState.live ? 'source.openSheet' : 'source.open')
+      : (appState.live ? 'history.openSheet' : 'history.openAll');
+  });
+  applyTranslations();
 }
 
 async function renderMode() {
