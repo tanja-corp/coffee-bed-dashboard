@@ -6,5 +6,5 @@ export const AGE_ORANGE_MAX = 10;
 export const MOISTURE_TARGET = 11;
 export const OCCUPANCY_ALERT = 80;
 export const SNAPSHOT_CSV_URL = './data/shah-drying-records.csv';
-export const CURRENT_STATUS_URL = null;
+export const CURRENT_STATUS_URL = 'https://docs.google.com/spreadsheets/d/1GVz0MOv4t4FZjWLYBs6KeeVf9583wV3UqA6rWA_BlDs/export?format=csv&gid=1305145';
 export const CURRENT_STATUS_DATE_ORDER = 'dmy';
