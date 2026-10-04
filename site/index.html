@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0a0a0a">
   <title>Shah Coffee Beds | Drying Dashboard</title>
   <link rel="stylesheet" href="./styles.css">
-  <script src="./app.js" defer></script>
+  <script type="module" src="./app.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -18,49 +18,68 @@
     <div id="snapshot-date" class="snapshot-date">CSVを読み込み中</div>
   </header>
 
+  <div id="demo-band" class="demo-band" role="status" hidden>
+    デモ表示：架空のサンプルデータです。実際のベッド状況ではありません
+  </div>
+
   <main class="page-shell">
     <section class="intro">
       <div>
         <p class="eyebrow">DRYING BED MONITOR</p>
         <h1>コーヒーベッド <span>稼働状況</span></h1>
-        <p class="intro-copy">80台の配置と乾燥記録をひと目で確認。稼働中の投入日が登録されると、乾燥日数を色で確認できます。</p>
+        <p class="intro-copy">Shahの<span id="intro-bed-count">80</span>台を、現在状態と過去記録を分けて確認します。乾燥期間は<span id="intro-drying-days">14日</span>固定、色は投入日からの経過日数です。</p>
       </div>
-      <a class="source-link" href="./data/shah-drying-records.csv">CSVを読む <span aria-hidden="true">↗</span></a>
+      <div class="intro-actions">
+        <button id="mode-toggle" class="mode-toggle" type="button" aria-pressed="false">
+          <span>デモ表示 / 実データ</span>
+          <small id="mode-toggle-state">現在：実データ</small>
+        </button>
+        <a class="source-link" href="./data/shah-drying-records.csv">CSVを読む <span aria-hidden="true">↗</span></a>
+      </div>
     </section>
+
     <p class="summary-note">
-      稼働日数の目安：<span class="age-chip age-green">0–7日</span>
-      <span class="age-chip age-orange">8–13日</span>
-      <span class="age-chip age-red">14日以上</span>。
-      現在の投入日・占有率がCSVにないため、マップの色は未判定です。Nylex状態（良好15／要整備65）は台数のみで、個別のベッド割当は未提供です。
+      乾燥期間 <strong id="drying-period-copy">14日固定</strong>。色の区切り：
+      <span id="green-range-copy" class="age-chip age-green">きみどり 0–7日</span>
+      <span id="orange-range-copy" class="age-chip age-orange">オレンジ 8–10日</span>
+      <span id="red-range-copy" class="age-chip age-red">赤 11日以上</span>。
+      水分は実測値だけを表示し、日数から推定しません。
     </p>
 
-    <section id="data-alert" class="data-alert" role="status" aria-live="polite">
+    <section id="occupancy-alert" class="occupancy-alert" role="alert" hidden>
       <span class="alert-icon" aria-hidden="true">!</span>
+      <strong>占有率80%以上：空きベッドが少なくなっています。Skin dryerの事前利用を検討</strong>
+    </section>
+
+    <section id="data-alert" class="data-alert" role="status" aria-live="polite">
+      <span class="alert-icon" aria-hidden="true">i</span>
       <span id="data-alert-text">読み取り専用CSVからShahの記録を確認しています。</span>
     </section>
 
-    <section id="summary" class="summary-grid" aria-label="Shah bed summary">
+    <section class="summary-grid" aria-label="Shah facility summary">
       <article class="summary-card summary-capacity">
         <span class="summary-label">BED CAPACITY</span>
-        <strong>80</strong><span class="summary-unit">beds</span>
+        <strong id="capacity-value">80</strong><span class="summary-unit">beds</span>
         <small>Shah · 総台数</small>
       </article>
       <article class="summary-card">
         <span class="summary-label">NYLEX · GOOD</span>
         <strong>15</strong><span class="summary-unit">beds</span>
-        <small>良好</small>
+        <small>施設情報 · 良好</small>
       </article>
       <article class="summary-card summary-worn">
         <span class="summary-label">NYLEX · WORN</span>
         <strong>65</strong><span class="summary-unit">beds</span>
-        <small>要整備</small>
+        <small>施設情報 · 要整備</small>
       </article>
       <article class="summary-card summary-occupancy">
-        <span class="summary-label">OCCUPANCY</span>
-        <strong>--</strong><span class="summary-unit">%</span>
-        <small>元データに占有率なし</small>
+        <span id="occupancy-label" class="summary-label">OCCUPANCY · 80床平均</span>
+        <strong id="occupancy-value">不明</strong><span id="occupancy-unit" class="summary-unit"></span>
+        <small id="occupancy-note">現在占有率は未提供</small>
       </article>
     </section>
+
+    <section id="state-summary" class="state-summary-grid" aria-label="Bed state counts"></section>
 
     <section class="panel map-panel">
       <div class="panel-heading">
@@ -70,16 +89,20 @@
         </div>
         <span class="approx-badge">写真をもとにした概略図</span>
       </div>
-      <div class="map-frame">
-        <svg id="yard-map" viewBox="0 0 1000 660" role="group" aria-label="Shah drying site schematic with 80 beds"></svg>
+      <div id="map-frame" class="map-frame">
+        <svg id="yard-map" viewBox="0 0 1000 660" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Shah drying site schematic with 80 beds"></svg>
+        <div id="map-tooltip" class="map-tooltip" role="tooltip" hidden></div>
       </div>
       <div class="map-legend" aria-label="Map legend">
-        <span><i class="legend-bed" aria-hidden="true"></i>Bed</span>
-        <span><i class="legend-history" aria-hidden="true"></i>記録あり</span>
-        <span><i class="legend-unknown" aria-hidden="true"></i>現在状況不明</span>
-        <span><i class="legend-place" aria-hidden="true"></i>施設</span>
+        <span><i class="legend-swatch state-green" aria-hidden="true">G</i><span id="legend-green-copy">きみどり 0–7日</span></span>
+        <span><i class="legend-swatch state-orange" aria-hidden="true">O</i><span id="legend-orange-copy">オレンジ 8–10日</span></span>
+        <span><i class="legend-swatch state-red" aria-hidden="true">R</i><span id="legend-red-copy">赤 11日以上</span></span>
+        <span><i class="legend-swatch state-confirm" aria-hidden="true">!</i><span id="legend-confirm-copy">確認 14日以上かつ水分&gt;11%</span></span>
+        <span><i class="legend-swatch state-empty" aria-hidden="true">○</i>空き 0%</span>
+        <span><i class="legend-swatch state-unknown" aria-hidden="true">?</i>不明</span>
+        <span><i class="legend-swatch state-invalid" aria-hidden="true">!</i>日付不正</span>
       </div>
-      <p class="map-caption">衛星写真で見える乾燥ベッドの列、Factory、Store、Dam、Skin dryerの位置関係を簡略化しています。bed番号の現地対応と正確な区画形状は未確認です。</p>
+      <p class="map-caption">写真をもとにした概略図・測量図ではありません。Bed番号と現地番号の対応は未確認です。</p>
     </section>
 
     <section class="lower-grid">
@@ -92,14 +115,14 @@
           <span id="selected-badge" class="state-badge state-unknown">未選択</span>
         </div>
         <div id="selected-detail" class="detail-body">
-          <p class="empty-detail">マップの番号を選ぶと、該当する乾燥記録を表示します。</p>
+          <p class="empty-detail">マップの番号を選ぶと、現在状態とCSV内の過去記録を表示します。</p>
         </div>
       </article>
 
       <article class="panel records-panel">
         <div class="panel-heading compact-heading">
           <div>
-            <p class="eyebrow">SOURCE HISTORY</p>
+            <p class="eyebrow">REAL CSV HISTORY</p>
             <h2>最近の乾燥記録</h2>
           </div>
           <span id="record-count" class="count-badge">--件</span>
@@ -113,7 +136,7 @@
 
     <footer class="page-footer">
       <span>SHAH · Read-only data snapshot</span>
-      <span>14日固定 · 現在のベッド占有状況は元データ未提供</span>
+      <span id="footer-threshold-copy">乾燥期間14日固定 · 色は経過日数の区分</span>
     </footer>
   </main>
 </body>

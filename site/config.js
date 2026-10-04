@@ -1,0 +1,9 @@
+export const TZ = 'Africa/Nairobi';
+export const BED_COUNT = 80;
+export const DRYING_DAYS = 14;
+export const AGE_GREEN_MAX = 7;
+export const AGE_ORANGE_MAX = 10;
+export const MOISTURE_TARGET = 11;
+export const OCCUPANCY_ALERT = 80;
+export const SNAPSHOT_CSV_URL = './data/shah-drying-records.csv';
+export const CURRENT_STATUS_URL = null;
