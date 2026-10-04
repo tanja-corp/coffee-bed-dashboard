@@ -9,7 +9,7 @@ import {
   OCCUPANCY_ALERT,
   TZ
 } from './config.js';
-import { demoAdapter, liveAdapter, snapshotAdapter } from './adapters.js';
+import { liveAdapter, snapshotAdapter } from './adapters.js';
 import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -33,7 +33,8 @@ const appState = {
   liveWarnings: null,
   sourceInfo: {},
   snapshotBeds: [],
-  demo: false,
+  mobileView: 'map',
+  zoom: 2,
   todayIso: nairobiTodayIso(),
   selectedBed: null,
   snapshotAvailable: false,
@@ -287,6 +288,7 @@ export function buildMap(beds) {
   drawFacility(map);
   const lookup = new Map(beds.map((bed) => [bed.bed, bed]));
   bedLayout().forEach((position) => drawBed(map, position, lookup.get(position.bed)));
+  renderBedGrid(beds);
 }
 
 function drawBed(map, position, bed) {
@@ -318,14 +320,93 @@ function drawBed(map, position, bed) {
   group.addEventListener('blur', hideTooltip);
   group.addEventListener('click', (event) => {
     selectBed(bed.bed, appState.history);
-    if (event.pointerType === 'touch') showTooltip(bed, result, event);
+    if (isMobileLayout()) openBedSheet(bed, result);
+    else if (event.pointerType === 'touch') showTooltip(bed, result, event);
   });
   group.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       selectBed(bed.bed, appState.history);
+      if (isMobileLayout()) openBedSheet(bed, result);
     }
   });
+}
+
+function isMobileLayout() {
+  return window.matchMedia('(max-width: 720px)').matches;
+}
+
+function renderBedGrid(beds) {
+  const grid = document.getElementById('bed-grid');
+  grid.replaceChildren();
+  beds.forEach((bed) => {
+    const result = classifyBed(bed);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `grid-bed state-${result.state}${result.confirm ? ' state-confirm' : ''}`;
+    button.setAttribute('aria-label', ariaLabelForBed(bed, result));
+    button.dataset.gridBed = String(bed.bed);
+    const age = result.age === null ? '' : t('state.days', { count: result.age });
+    button.innerHTML = `<strong>${bed.bed}</strong><span class="grid-bed-icon" aria-hidden="true">${escapeHtml(result.confirm ? '!' : result.icon)}</span>` +
+      `<small>${escapeHtml(age || result.label)}</small>`;
+    button.addEventListener('click', () => {
+      selectBed(bed.bed, appState.history);
+      openBedSheet(bed, result);
+    });
+    grid.appendChild(button);
+  });
+}
+
+function openBedSheet(bed, result) {
+  hideTooltip();
+  const sheet = document.getElementById('bed-sheet');
+  sheet.innerHTML = `<button type="button" class="bed-sheet-close" aria-label="${escapeHtml(t('sheet.close'))}">×</button>` +
+    `<div class="bed-sheet-body">${tooltipHtml(bed, result)}</div>`;
+  sheet.querySelector('.bed-sheet-close').addEventListener('click', closeBedSheet);
+  sheet.dataset.state = result.state;
+  sheet.hidden = false;
+}
+
+function closeBedSheet() {
+  document.getElementById('bed-sheet').hidden = true;
+}
+
+function applyMobileView() {
+  const map = appState.mobileView === 'map';
+  const mobile = isMobileLayout();
+  document.getElementById('map-frame').hidden = mobile && !map;
+  document.getElementById('bed-grid').hidden = !mobile || map;
+  document.getElementById('zoom-controls').hidden = !map;
+  document.querySelectorAll('#view-switch button').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.view === appState.mobileView));
+    button.tabIndex = button.dataset.view === appState.mobileView ? 0 : -1;
+  });
+  document.getElementById('map-frame').style.setProperty('--zoom', String(appState.zoom));
+}
+
+function setZoom(next) {
+  const frame = document.getElementById('map-frame');
+  const previous = appState.zoom;
+  appState.zoom = Math.min(4, Math.max(1, next));
+  const centerX = (frame.scrollLeft + frame.clientWidth / 2) / previous;
+  const centerY = (frame.scrollTop + frame.clientHeight / 2) / previous;
+  frame.style.setProperty('--zoom', String(appState.zoom));
+  frame.scrollLeft = centerX * appState.zoom - frame.clientWidth / 2;
+  frame.scrollTop = centerY * appState.zoom - frame.clientHeight / 2;
+}
+
+function setupMobileControls() {
+  document.querySelectorAll('#view-switch button').forEach((button) => {
+    button.addEventListener('click', () => {
+      appState.mobileView = button.dataset.view;
+      closeBedSheet();
+      applyMobileView();
+    });
+  });
+  document.getElementById('zoom-in').addEventListener('click', () => setZoom(appState.zoom + 0.75));
+  document.getElementById('zoom-out').addEventListener('click', () => setZoom(appState.zoom - 0.75));
+  window.matchMedia('(max-width: 720px)').addEventListener('change', () => { closeBedSheet(); applyMobileView(); });
+  applyMobileView();
 }
 
 function tooltipHtml(bed, result) {
@@ -492,13 +573,6 @@ function renderSummary(beds) {
   document.getElementById('occupancy-alert').hidden = occupancy === null || occupancy < OCCUPANCY_ALERT;
 }
 
-function updateModeUi() {
-  const toggle = document.getElementById('mode-toggle');
-  toggle.setAttribute('aria-pressed', String(appState.demo));
-  document.getElementById('mode-toggle-state').textContent = appState.demo ? t('mode.demo') : t('mode.live');
-  document.getElementById('demo-band').hidden = !appState.demo;
-}
-
 function applyConfigCopy() {
   document.getElementById('capacity-value').textContent = BED_COUNT;
   document.getElementById('legend-green-copy').textContent = t('legend.green', { greenMax: AGE_GREEN_MAX });
@@ -526,9 +600,6 @@ function renderDataAlert() {
   if (appState.currentFailed) {
     alert.classList.add('data-alert-error');
     status.textContent = t('data.currentFailed');
-  } else if (appState.demo) {
-    alert.classList.add('data-alert-demo');
-    status.textContent = t('data.demo', { date: appState.todayIso });
   } else if (appState.live) {
     const warnings = appState.liveWarnings || { unparsedOpenRows: 0, outOfRangeTables: [] };
     const notes = [t('data.live')];
@@ -556,11 +627,13 @@ function updateSourceLinks() {
     if (appState.live) { link.target = '_blank'; link.rel = 'noopener'; }
     else { link.removeAttribute('target'); link.removeAttribute('rel'); }
     const label = link.querySelector('[data-i18n]');
-    if (label) label.dataset.i18n = link.classList.contains('source-link')
-      ? (appState.live ? 'source.openSheet' : 'source.open')
-      : (appState.live ? 'history.openSheet' : 'history.openAll');
+    if (label) {
+      label.dataset.i18n = link.classList.contains('source-link')
+        ? (appState.live ? 'source.openSheet' : 'source.open')
+        : (appState.live ? 'history.openSheet' : 'history.openAll');
+      label.textContent = t(label.dataset.i18n);
+    }
   });
-  applyTranslations();
 }
 
 async function renderMode() {
@@ -570,8 +643,7 @@ async function renderMode() {
   appState.liveWarnings = null;
   appState.history = appState.snapshotHistory;
   appState.records = appState.snapshotRecords;
-  if (appState.demo) current = demoAdapter(appState.todayIso);
-  else if (CURRENT_STATUS_URL) {
+  if (CURRENT_STATUS_URL) {
     current = await liveAdapter();
     appState.live = true;
     appState.liveWarnings = current.warnings;
@@ -580,7 +652,6 @@ async function renderMode() {
   } else current = { beds: appState.snapshotBeds };
   appState.beds = current.beds;
   appState.bedById = new Map(current.beds.map((bed) => [bed.bed, bed]));
-  updateModeUi();
   updateSnapshotUi();
   updateSourceLinks();
   renderRecords(appState.records);
@@ -594,7 +665,6 @@ function rerenderLanguage() {
   applyTranslations();
   applyConfigCopy();
   updateSnapshotUi();
-  updateModeUi();
   renderRecords(appState.records);
   if (appState.beds.length) {
     renderSummary(appState.beds);
@@ -675,28 +745,7 @@ async function initialize() {
   applyTranslations();
   applyConfigCopy();
   setupLanguageSwitcher();
-  const params = new URLSearchParams(window.location.search);
-  appState.demo = params.get('demo') === '1';
-  document.getElementById('mode-toggle').addEventListener('click', async () => {
-    appState.demo = !appState.demo;
-    const nextParams = new URLSearchParams(window.location.search);
-    if (appState.demo) nextParams.set('demo', '1');
-    else nextParams.delete('demo');
-    const query = nextParams.toString();
-    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
-    try {
-      await renderMode();
-    } catch (error) {
-      console.error(error);
-      appState.currentFailed = true;
-      appState.beds = appState.snapshotBeds;
-      appState.bedById = new Map(appState.beds.map((bed) => [bed.bed, bed]));
-      renderSummary(appState.beds);
-      buildMap(appState.beds);
-      if (appState.selectedBed) selectBed(appState.selectedBed, appState.history);
-      renderDataAlert();
-    }
-  });
+  setupMobileControls();
 
   try {
     const [snapshot, infoResponse] = await Promise.all([

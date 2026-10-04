@@ -25,10 +25,6 @@
     </div>
   </header>
 
-  <div id="demo-band" class="demo-band" role="status" hidden data-i18n="demo.band">
-    Demo view: fictional sample data, not actual bed conditions
-  </div>
-
   <main class="page-shell">
     <section class="panel map-panel">
       <div class="map-toolbar">
@@ -40,13 +36,20 @@
           </div>
         </div>
         <div class="map-actions">
-          <button id="mode-toggle" class="mode-toggle" type="button" aria-pressed="false">
-            <span data-i18n="mode.label">Demo / live data</span>
-            <small id="mode-toggle-state" data-i18n="mode.live">Now: live data</small>
-          </button>
           <a class="source-link" href="./data/shah-drying-records.csv">
             <span data-i18n="source.open">Open CSV</span><span aria-hidden="true">↗</span>
           </a>
+        </div>
+      </div>
+
+      <div class="view-controls" id="view-controls">
+        <div class="view-switch" id="view-switch" role="radiogroup" aria-label="Map view" data-i18n-aria="view.aria">
+          <button type="button" role="radio" aria-checked="true" data-view="map" data-i18n="view.map">Map</button>
+          <button type="button" role="radio" aria-checked="false" data-view="grid" data-i18n="view.grid">Grid</button>
+        </div>
+        <div class="zoom-controls" id="zoom-controls">
+          <button type="button" id="zoom-out" aria-label="Zoom out" data-i18n-aria="zoom.out">−</button>
+          <button type="button" id="zoom-in" aria-label="Zoom in" data-i18n-aria="zoom.in">+</button>
         </div>
       </div>
 
@@ -54,6 +57,7 @@
         <svg id="yard-map" viewBox="55 30 900 605" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Shah drying site schematic with 80 beds"></svg>
         <div id="map-tooltip" class="map-tooltip" role="tooltip" hidden></div>
       </div>
+      <div id="bed-grid" class="bed-grid" role="group" aria-label="Beds" data-i18n-aria="grid.aria" hidden></div>
       <div class="map-footer">
         <div class="map-legend" aria-label="Map legend" data-i18n-aria="map.legendAria">
           <span><i class="legend-swatch state-green" aria-hidden="true">G</i><span id="legend-green-copy"></span></span>
@@ -141,5 +145,6 @@
       <span id="footer-threshold-copy"></span>
     </footer>
   </main>
+  <div id="bed-sheet" class="bed-sheet" role="dialog" aria-modal="false" hidden></div>
 </body>
 </html>
