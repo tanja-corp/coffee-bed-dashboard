@@ -12,6 +12,7 @@ GitHub Pages project for monitoring Shah's coffee drying beds.
 
 ## Dashboard behavior
 
+- The language switcher in the top bar changes the UI between English (default), Kiswahili, and Japanese. A valid `?lang=en`, `?lang=sw`, or `?lang=ja` URL parameter overrides the saved browser preference. Edit interface translations in `site/i18n.js`.
 - `site/index.html` renders the Shah dashboard and an approximate facility diagram based on the five user-provided aerial/reference photos. It marks the drying areas and Factory, Store, Dam, and Skin dryer. The diagram is illustrative, not a surveyed floor plan; actual bed-number-to-position mapping has not been confirmed. The reference photos themselves are not published.
 - Selecting a bed shows matching historical rows when its number occurs in the CSV `table_numbers` field. This is a possible history lookup, not confirmation that the bed is currently occupied.
 - The CSV's occupancy percentage is blank, and no current per-bed load dates are provided. The dashboard therefore reports current occupancy and bed state as unknown. It does not treat `no_of_debes` as a percentage.
@@ -27,6 +28,10 @@ For local preview, run a static HTTP server from the repository root and open `h
 GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/workflows/pages.yml`.
 
 ## 日本語の運用案内
+
+### 言語切り替え
+
+上部バーの言語切り替えで、英語（初期表示）・Kiswahili・日本語を選べます。URLに `?lang=en`、`?lang=sw`、`?lang=ja` のいずれかを付けると、ブラウザに保存された選択よりURL指定が優先されます。翻訳文は `site/i18n.js` で編集します。
 
 ### 公開URLとローカル起動
 
