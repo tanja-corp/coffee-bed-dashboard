@@ -7,3 +7,4 @@ export const MOISTURE_TARGET = 11;
 export const OCCUPANCY_ALERT = 80;
 export const SNAPSHOT_CSV_URL = './data/shah-drying-records.csv';
 export const CURRENT_STATUS_URL = null;
+export const CURRENT_STATUS_DATE_ORDER = 'dmy';

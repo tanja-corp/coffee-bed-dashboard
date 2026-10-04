@@ -26,6 +26,10 @@ const appState = {
   bedById: new Map(),
   history: new Map(),
   records: [],
+  snapshotHistory: new Map(),
+  snapshotRecords: [],
+  live: false,
+  liveWarnings: null,
   sourceInfo: {},
   snapshotBeds: [],
   demo: false,
@@ -507,7 +511,8 @@ function applyConfigCopy() {
 
 function updateSnapshotUi() {
   const snapshot = document.getElementById('snapshot-date');
-  if (appState.snapshotFailed) snapshot.textContent = t('snapshot.failed');
+  if (appState.live) snapshot.textContent = t('snapshot.live');
+  else if (appState.snapshotFailed) snapshot.textContent = t('snapshot.failed');
   else if (appState.snapshotAvailable) {
     snapshot.textContent = t('snapshot.label', { date: appState.sourceInfo.snapshot_date || t('snapshot.unknown') });
   } else snapshot.textContent = t('loading.csv');
@@ -523,8 +528,13 @@ function renderDataAlert() {
   } else if (appState.demo) {
     alert.classList.add('data-alert-demo');
     status.textContent = t('data.demo', { date: appState.todayIso });
-  } else if (CURRENT_STATUS_URL) {
-    status.textContent = t('data.live');
+  } else if (appState.live) {
+    const warnings = appState.liveWarnings || { unparsedOpenRows: 0, outOfRangeTables: [] };
+    const notes = [t('data.live')];
+    if (warnings.unparsedOpenRows) notes.push(t('data.liveUnparsed', { count: warnings.unparsedOpenRows }));
+    if (warnings.outOfRangeTables.length) notes.push(t('data.liveOutOfRange', { tables: warnings.outOfRangeTables.join(', '), beds: BED_COUNT }));
+    if (warnings.unparsedOpenRows || warnings.outOfRangeTables.length) alert.classList.add('data-alert-warning');
+    status.textContent = notes.join(' ');
   } else if (appState.snapshotAvailable) {
     alert.classList.add('data-alert-warning');
     status.textContent = t('data.snapshot', {
@@ -538,15 +548,32 @@ function renderDataAlert() {
   }
 }
 
+function updateSourceLinks() {
+  const href = appState.live ? CURRENT_STATUS_URL : './data/shah-drying-records.csv';
+  document.querySelectorAll('.source-link, .text-link').forEach((link) => { link.href = href; });
+}
+
 async function renderMode() {
   let current;
   appState.currentFailed = false;
+  appState.live = false;
+  appState.liveWarnings = null;
+  appState.history = appState.snapshotHistory;
+  appState.records = appState.snapshotRecords;
   if (appState.demo) current = demoAdapter(appState.todayIso);
-  else if (CURRENT_STATUS_URL) current = await liveAdapter();
-  else current = { beds: appState.snapshotBeds };
+  else if (CURRENT_STATUS_URL) {
+    current = await liveAdapter();
+    appState.live = true;
+    appState.liveWarnings = current.warnings;
+    appState.history = current.history;
+    appState.records = current.records;
+  } else current = { beds: appState.snapshotBeds };
   appState.beds = current.beds;
   appState.bedById = new Map(current.beds.map((bed) => [bed.bed, bed]));
   updateModeUi();
+  updateSnapshotUi();
+  updateSourceLinks();
+  renderRecords(appState.records);
   renderSummary(current.beds);
   buildMap(current.beds);
   if (appState.selectedBed) selectBed(appState.selectedBed, appState.history);
@@ -671,6 +698,8 @@ async function initialize() {
     appState.snapshotBeds = snapshot.beds;
     appState.history = snapshot.history;
     appState.records = snapshot.records;
+    appState.snapshotHistory = snapshot.history;
+    appState.snapshotRecords = snapshot.records;
     appState.snapshotAvailable = true;
   } catch (error) {
     console.error(error);

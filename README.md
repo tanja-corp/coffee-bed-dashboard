@@ -64,15 +64,17 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 - `MOISTURE_TARGET`: 実測水分の目安値（推定には使いません）
 - `OCCUPANCY_ALERT`: 全80床の平均占有率警告
 
-### 自動同期がない理由と、同期を有効にする最小手順
+### ライブ連携（Shahシートを直接読む）
 
-現在のDriveファイルはネイティブGoogle SheetsではなくXLSXです。また、現在の投入日とベッド別占有率の列がないため、現時点の稼働状態を安全に自動判定できません。`no_of_debes` は占有率ではありません。
+ネイティブ版の「Traceability Record Sheet_2026crop」のShahタブを読みます。`site/config.js` の `CURRENT_STATUS_URL` にそのタブのCSV URLを入れると有効になります（`null` の間は、これまでどおり公開スナップショットを表示）。
 
-同期を有効にする場合は、ファイル所有者の判断で次の手順を行います。
+- 読むのは Tables ブロックの `Date In`、`Table Nos`、`Occupancy %`、`Date Out`（列は見出しで探すので、列を足しても動きます）。
+- `Table Nos` があり `Date Out` が空の行を「そのテーブルに乗っている」と判断します。`Date In` は各ロットの先頭行にだけあるため、下の行へ引き継ぎます。
+- 同じテーブルに複数行ある場合は、一番古い `Date In` で色を決め、`Occupancy %` は各行の合計（上限100）にします。1行に複数のテーブル番号があるときは、その行の `Occupancy %` を各テーブルに同じ値で当てます。
+- `Occupancy %` が空の行があるテーブルは占有率「不明」です。全テーブルが埋まるまで、80台の平均占有率は「不明」と表示されます。
+- 乗っている行が1つもないテーブルは「空き」です。引き払ったら `Date Out` を入れてください。入れ忘れると、そのテーブルは使用中のまま日数が増え、赤になります。
+- 日付は `dd/mm/yyyy`（シートの表示形式）で読みます。年の誤入力（例: 2926）は「日付不正」と表示します。
+- `Table Nos` が `4-15` のような範囲表記の未完了行、または81番以上のテーブルは、マップに載せられないため画面に注意書きが出ます。
+- 「CSVを読む」と記録一覧は、ライブ連携中はシートの内容に切り替わります。
 
-1. 現況の入力用に、ネイティブのGoogleスプレッドシート「Shah Current Bed Status」を作りました（列は `Bed No`、`Date In`、`Occupancy %` のみ。`templates/shah-current-status-template.csv` と同じ内容）。元のXLSXとは別のファイルです。空きベッドは `Occupancy %` に必ず0を入れます。`Moisture %` 列を足せば水分も表示されます（任意）。
-2. ファイルをネイティブGoogle Sheetsへ変換するか、Google Sheetsとして保存します。
-3. そのシートだけをCSVとして「ウェブに公開」します。`Date In` 列は書式を「yyyy-mm-dd」にそろえると確実です（`4/10/2026` のような形式も、日付として判別できる場合は読みます）。
-4. `site/config.js` の `CURRENT_STATUS_URL` に公開CSV URLを設定します。
-
-ブラウザへサービスアカウント鍵や認証情報を置かないでください。公開CSVに含める範囲はShahの現在状況だけに限定します。
+ブラウザへサービスアカウント鍵や認証情報を置かないでください。公開するのはShahのタブだけにします。

@@ -1,4 +1,5 @@
-import { BED_COUNT, CURRENT_STATUS_URL, SNAPSHOT_CSV_URL, TZ } from './config.js';
+import { BED_COUNT, CURRENT_STATUS_DATE_ORDER, CURRENT_STATUS_URL, SNAPSHOT_CSV_URL } from './config.js';
+import { parseTraceability } from './traceability.js';
 import { bedIds, parseCsv } from './app.js';
 
 function emptyBed(bed, source) {
@@ -98,89 +99,10 @@ export function demoAdapter(todayIso) {
   return { beds, history: new Map(), records: [] };
 }
 
-// Expected published CSV columns for the future live sheet:
-// Bed No, Date In, Occupancy % (Moisture % is optional)
+// Live source: the Shah tab of the traceability workbook, published as CSV.
 export async function liveAdapter(url = CURRENT_STATUS_URL) {
   if (!url) throw new Error('CURRENT_STATUS_URL is not configured');
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error('Current status CSV HTTP ' + response.status);
-  const rows = parseHeaderCsv(await response.text());
-  const byBed = new Map();
-
-  rows.forEach((row) => {
-    const bed = Number(row['Bed No']);
-    if (!Number.isInteger(bed) || bed < 1 || bed > BED_COUNT) return;
-    const rawDate = (row['Date In'] || '').trim();
-    const loadDate = parseSheetDate(rawDate);
-    byBed.set(bed, {
-      bed,
-      loadDate,
-      loadDateRaw: rawDate,
-      occupancyPercent: nullableNumber(row['Occupancy %']),
-      moisturePercent: nullableNumber(row['Moisture %']),
-      source: 'live'
-    });
-  });
-
-  return {
-    beds: Array.from({ length: BED_COUNT }, (_, index) => byBed.get(index + 1) || emptyBed(index + 1, 'live')),
-    history: new Map(),
-    records: []
-  };
-}
-
-// A published Google Sheet shows dates in the owner's locale (2026-10-04, 4/10/2026 or 10/4/2026).
-// A day/month order that cannot be told apart is rejected rather than guessed.
-function parseSheetDate(raw) {
-  const text = (raw || '').trim();
-  let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (match) return isoFrom(Number(match[1]), Number(match[2]), Number(match[3]));
-  match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-  const first = Number(match[1]), second = Number(match[2]), year = Number(match[3]);
-  if (first > 12) return isoFrom(year, second, first);
-  if (second > 12) return isoFrom(year, first, second);
-  if (first === second) return isoFrom(year, first, second);
-  const today = Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date()));
-  const plausible = (iso) => {
-    const age = iso ? (today - Date.parse(iso)) / 86400000 : NaN;
-    return age >= 0 && age <= 45;
-  };
-  const dayFirst = isoFrom(year, second, first);
-  const monthFirst = isoFrom(year, first, second);
-  if (plausible(dayFirst) && !plausible(monthFirst)) return dayFirst;
-  if (plausible(monthFirst) && !plausible(dayFirst)) return monthFirst;
-  return null;
-}
-
-function isoFrom(year, month, day) {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
-  return [year, String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
-}
-
-function nullableNumber(value) {
-  if (value === null || value === undefined || String(value).trim() === '') return null;
-  const number = Number(String(value).replace('%', '').trim());
-  return Number.isFinite(number) ? number : null;
-}
-
-function parseHeaderCsv(text) {
-  const rows = [];
-  let row = [], cell = '', quoted = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    if (quoted) {
-      if (character === '"' && text[index + 1] === '"') { cell += '"'; index += 1; }
-      else if (character === '"') quoted = false;
-      else cell += character;
-    } else if (character === '"') quoted = true;
-    else if (character === ',') { row.push(cell); cell = ''; }
-    else if (character === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
-    else if (character !== '\r') cell += character;
-  }
-  if (cell.length || row.length) { row.push(cell); rows.push(row); }
-  const nonEmpty = rows.filter((line) => line.some((value) => value.trim()));
-  const headers = nonEmpty.shift() || [];
-  return nonEmpty.map((line) => Object.fromEntries(headers.map((header, index) => [header.trim(), (line[index] || '').trim()])));
+  return parseTraceability(await response.text(), { bedCount: BED_COUNT, dateOrder: CURRENT_STATUS_DATE_ORDER });
 }
