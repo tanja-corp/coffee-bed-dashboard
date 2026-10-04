@@ -70,9 +70,9 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 
 同期を有効にする場合は、ファイル所有者の判断で次の手順を行います。
 
-1. Shah専用の現在状況タブを追加し、`Bed No`、`Date In`、`Occupancy %`、必要に応じて `Moisture %` の列を用意します。
+1. 現況の入力用に、ネイティブのGoogleスプレッドシート「Shah Current Bed Status」を作りました（列は `Bed No`、`Date In`、`Occupancy %` のみ。`templates/shah-current-status-template.csv` と同じ内容）。元のXLSXとは別のファイルです。空きベッドは `Occupancy %` に必ず0を入れます。`Moisture %` 列を足せば水分も表示されます（任意）。
 2. ファイルをネイティブGoogle Sheetsへ変換するか、Google Sheetsとして保存します。
-3. そのタブだけをCSVとして「ウェブに公開」するか、gviz CSV URLを用意します。
+3. そのシートだけをCSVとして「ウェブに公開」します。`Date In` 列は書式を「yyyy-mm-dd」にそろえると確実です（`4/10/2026` のような形式も、日付として判別できる場合は読みます）。
 4. `site/config.js` の `CURRENT_STATUS_URL` に公開CSV URLを設定します。
 
 ブラウザへサービスアカウント鍵や認証情報を置かないでください。公開CSVに含める範囲はShahの現在状況だけに限定します。
