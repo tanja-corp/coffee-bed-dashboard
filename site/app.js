@@ -1,19 +1,21 @@
 import {
   AGE_GREEN_MAX,
   AGE_ORANGE_MAX,
-  BED_COUNT,
-  CURRENT_STATUS_URL,
-  CURRENT_STATUS_SHEET_URL,
+  DEFAULT_SITE,
   DRYING_DAYS,
   MOISTURE_TARGET,
   OCCUPANCY_ALERT,
+  SITES,
   TZ
 } from './config.js';
-import { liveAdapter, snapshotAdapter } from './adapters.js';
+import { emptyBeds, liveAdapter, snapshotAdapter } from './adapters.js';
 import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js';
+import { SITE_MAPS, addText, svgElement } from './maps.js';
 
-const NS = 'http://www.w3.org/2000/svg';
+export { addText, svgElement };
+
 const LANGUAGE_STORAGE_KEY = 'coffee-bed-dashboard-language';
+const SITE_STORAGE_KEY = 'coffee-bed-dashboard-site';
 const languages = ['en', 'sw', 'ja'];
 const fields = [
   'source_row', 'harvest_date', 'grade', 'fermentation_date', 'tank_no',
@@ -21,26 +23,23 @@ const fields = [
   'moisture_percent', 'storage_lot', 'storage_date_in', 'storage_lot_no',
   'storage_lot_departure_date', 'occupancy_percent'
 ];
+const RAIL_MAX_GROUPS = 10;
+const RAIL_MIN_GROUPS = 1;
 
 const appState = {
+  site: SITES[0],
+  // Per site: { status: 'loading' | 'ready', beds, history, records, live, warnings, liveFailed, snapshotAvailable, sourceInfo }
+  sites: new Map(),
   beds: [],
   bedById: new Map(),
   history: new Map(),
   records: [],
-  snapshotHistory: new Map(),
-  snapshotRecords: [],
-  live: false,
-  liveWarnings: null,
-  sourceInfo: {},
-  snapshotBeds: [],
   mobileView: 'map',
   zoom: 2,
   todayIso: nairobiTodayIso(),
   selectedBed: null,
-  snapshotAvailable: false,
-  snapshotFailed: false,
-  currentFailed: false,
-  initialized: false
+  panHintSeen: false,
+  railExpanded: false
 };
 
 export function parseCsv(text) {
@@ -63,11 +62,11 @@ export function parseCsv(text) {
   return nonEmpty.map((line) => Object.fromEntries(fields.map((field, index) => [field, (line[index] || '').trim()])));
 }
 
-export function bedIds(value) {
+export function bedIds(value, bedCount = appState.site.bedCount) {
   const source = (value || '').trim();
   if (!/^\d+(?:\s*[,;&]\s*\d+)*$/.test(source)) return [];
   return source.split(/[,;&]/).map((part) => Number(part.trim()))
-    .filter((number) => Number.isInteger(number) && number >= 1 && number <= BED_COUNT);
+    .filter((number) => Number.isInteger(number) && number >= 1 && number <= bedCount);
 }
 
 export function isoDate(value) {
@@ -85,19 +84,6 @@ export function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[character]);
-}
-
-export function svgElement(name, attrs, parent) {
-  const element = document.createElementNS(NS, name);
-  Object.entries(attrs || {}).forEach(([key, value]) => element.setAttribute(key, String(value)));
-  if (parent) parent.appendChild(element);
-  return element;
-}
-
-export function addText(parent, text, x, y, className, attrs) {
-  const element = svgElement('text', Object.assign({ x, y, class: className }, attrs || {}), parent);
-  element.textContent = text;
-  return element;
 }
 
 function nairobiTodayIso() {
@@ -134,6 +120,10 @@ export function addCalendarDays(value, days) {
   if (dayNumber === null) return null;
   const date = new Date((dayNumber + days) * 86400000);
   return [date.getUTCFullYear(), String(date.getUTCMonth() + 1).padStart(2, '0'), String(date.getUTCDate()).padStart(2, '0')].join('-');
+}
+
+function siteName(site = appState.site) {
+  return t(`site.${site.id}`);
 }
 
 function stateMeta(state) {
@@ -194,6 +184,20 @@ function loadDateText(bed) {
   return '—';
 }
 
+// Date Out: still on the bed (planned day-14 date) or, for an empty bed, when it was last cleared.
+function dateOutText(bed) {
+  if (bed.inUse) {
+    const planned = bed.loadDate ? addCalendarDays(bed.loadDate, DRYING_DAYS) : null;
+    return planned ? t('value.notOutPlanned', { date: planned }) : t('value.notOut');
+  }
+  if (bed.inUse === false && bed.lastDateOut) {
+    const ago = elapsedDays(bed.lastDateOut);
+    return t('value.lastOut', { date: bed.lastDateOut, count: ago === null ? '—' : ago });
+  }
+  if (bed.inUse === false) return t('value.noOutRecord');
+  return '—';
+}
+
 function statusText(result) {
   return result.confirm
     ? t('status.confirm', { icon: result.icon, label: result.label })
@@ -219,74 +223,38 @@ function addMapDefinitions(map) {
   }, defs);
   svgElement('rect', { width: 10, height: 10, fill: '#d8dde1' }, pattern);
   svgElement('line', { x1: 0, y1: 0, x2: 0, y2: 10, stroke: '#697580', 'stroke-width': 4 }, pattern);
+  const gravel = svgElement('pattern', { id: 'gravel-dots', width: 7, height: 7, patternUnits: 'userSpaceOnUse' }, defs);
+  svgElement('rect', { width: 7, height: 7, fill: '#8f9284' }, gravel);
+  svgElement('circle', { cx: 2, cy: 2, r: 1.2, fill: '#c9cabd' }, gravel);
+  svgElement('circle', { cx: 5.5, cy: 5, r: 1, fill: '#5f6457' }, gravel);
 }
 
-export function bedLayout() {
-  const layout = [];
-  let bed = 1;
-  for (let row = 0; row < 6; row += 1) {
-    for (let column = 0; column < 3; column += 1) {
-      layout.push({ bed: bed++, x: 150 + column * 125, y: 78 + row * 24, width: 105, height: 14, rotation: 0 });
-    }
-  }
-  for (let row = 0; row < 5; row += 1) {
-    for (let column = 0; column < 2; column += 1) {
-      layout.push({ bed: bed++, x: 590 + column * 98, y: 83 + row * 25, width: 82, height: 13, rotation: -35 });
-    }
-  }
-  for (let column = 0; column < 21; column += 1) {
-    layout.push({ bed: bed++, x: 145 + column * 18.5, y: 250, width: 14, height: 84, rotation: 0 });
-  }
-  for (let column = 0; column < 21; column += 1) {
-    layout.push({ bed: bed++, x: 145 + column * 18.5, y: 360, width: 14, height: 104, rotation: 0 });
-  }
-  for (let row = 0; row < 10; row += 1) {
-    layout.push({ bed: bed++, x: 845, y: 255 + row * 28, width: 72, height: 15, rotation: 0 });
-  }
-  if (layout.length !== BED_COUNT) throw new Error(`Map layout has ${layout.length} beds, expected ${BED_COUNT}`);
+export function bedLayout(site = appState.site) {
+  const layout = SITE_MAPS[site.id].layout();
+  if (layout.length !== site.bedCount) throw new Error(`Map layout has ${layout.length} beds, expected ${site.bedCount}`);
   return layout;
 }
 
-function drawFacility(map) {
-  const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
-  svgElement('polygon', { points: '785,90 843,108 835,162 777,146', class: 'landmark skin-roof' }, facilities);
-  svgElement('polygon', { points: '785,90 814,99 806,154 777,146', class: 'skin-roof-blue' }, facilities);
-  addText(facilities, t('facility.skinDryer'), 811, 178, 'landmark-label-outside');
-  svgElement('polygon', { points: '595,228 689,237 680,296 586,286', class: 'landmark store-roof' }, facilities);
-  addText(facilities, t('facility.store'), 637, 263, 'landmark-label');
-  svgElement('circle', { cx: 583, cy: 342, r: 38, class: 'landmark landmark-dam' }, facilities);
-  svgElement('circle', { cx: 583, cy: 342, r: 30, class: 'dam-waterline' }, facilities);
-  addText(facilities, t('facility.dam'), 583, 342, 'landmark-label');
-  svgElement('polygon', { points: '620,383 751,392 743,528 610,515', class: 'landmark factory-roof' }, facilities);
-  svgElement('line', { x1: 630, y1: 420, x2: 743, y2: 428, class: 'roof-ridge' }, facilities);
-  addText(facilities, t('facility.factory'), 681, 456, 'landmark-label');
-  svgElement('polygon', { points: '772,235 823,238 817,542 765,535', class: 'long-roof' }, facilities);
-  addText(facilities, t('map.washingArea'), 795, 312, 'long-roof-label', { transform: 'rotate(90 795 312)' });
-  addText(facilities, t('map.fermentation'), 793, 466, 'long-roof-label', { transform: 'rotate(90 793 466)' });
-  svgElement('polygon', { points: '526,397 576,399 574,444 523,441', class: 'landmark small-roof' }, facilities);
-  svgElement('polygon', { points: '548,462 603,466 599,507 544,503', class: 'landmark small-roof' }, facilities);
-  svgElement('polygon', { points: '511,470 542,472 540,510 508,507', class: 'landmark small-roof' }, facilities);
-  addText(facilities, t('map.smallBuildings'), 548, 528, 'minor-label');
-}
-
 export function buildMap(beds) {
+  const site = appState.site;
+  const definition = SITE_MAPS[site.id];
   const map = document.getElementById('yard-map');
+  const [x, y, width, height] = definition.viewBox;
+  map.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+  map.setAttribute('aria-label', t('map.aria', { site: siteName(), count: site.bedCount }));
+  map.style.aspectRatio = `${width} / ${height}`;
+  const hero = document.getElementById('hero');
+  hero.style.setProperty('--map-ratio', String(width / height));
+  hero.dataset.shape = width >= height ? 'landscape' : 'portrait';
+  map.dataset.site = site.id;
   map.replaceChildren();
   addMapDefinitions(map);
-  svgElement('rect', { x: 0, y: 0, width: 1000, height: 660, class: 'site-ground' }, map);
-  svgElement('path', { d: 'M116 48 L704 39 L891 118 L933 548 L775 616 L205 594 L94 500 Z', class: 'site-boundary' }, map);
-  svgElement('path', { d: 'M111 49 L704 40 L890 118 L932 547 L775 615 L205 593 L95 499 Z', class: 'site-boundary-line' }, map);
-  addText(map, t('map.north'), 74, 78, 'north-label');
-  svgElement('path', { d: 'M74 92 L74 53 M74 53 L67 65 M74 53 L81 65', class: 'north-arrow' }, map);
-  addText(map, t('map.zoneNorth'), 148, 67, 'zone-label');
-  addText(map, t('map.zoneNortheast'), 548, 69, 'zone-label');
-  addText(map, t('map.zoneWestUpper'), 145, 240, 'zone-label');
-  addText(map, t('map.zoneWestLower'), 145, 350, 'zone-label');
-  addText(map, t('map.zoneEast'), 847, 244, 'zone-label');
-  drawFacility(map);
+  definition.draw(map, t);
   const lookup = new Map(beds.map((bed) => [bed.bed, bed]));
-  bedLayout().forEach((position) => drawBed(map, position, lookup.get(position.bed)));
+  const bedLayer = svgElement('g', { class: 'bed-layer' }, map);
+  bedLayout().forEach((position) => drawBed(bedLayer, position, lookup.get(position.bed)));
   renderBedGrid(beds);
+  if (appState.selectedBed) markSelected(appState.selectedBed);
 }
 
 function drawBed(map, position, bed) {
@@ -294,20 +262,37 @@ function drawBed(map, position, bed) {
   const centerX = position.x + position.width / 2;
   const centerY = position.y + position.height / 2;
   const transform = position.rotation ? `rotate(${position.rotation} ${centerX} ${centerY})` : '';
+  const extraClass = (position.inferred ? ' bed-inferred' : '') + (position.unlocated ? ' bed-unlocated' : '');
   const group = svgElement('g', {
-    class: `bed-marker state-${result.state}${result.confirm ? ' state-confirm' : ''}`,
+    class: `bed-marker state-${result.state}${result.confirm ? ' state-confirm' : ''}${extraClass}`,
     transform, tabindex: 0, role: 'button', 'aria-label': ariaLabelForBed(bed, result), 'data-bed-group': bed.bed
   }, map);
   svgElement('rect', {
     x: position.x, y: position.y, width: position.width, height: position.height, rx: 2,
     class: `bed-cell state-${result.state}${result.confirm ? ' state-confirm' : ''}`, 'data-bed': bed.bed
   }, group);
+  // A bed under tree canopy in the photo keeps its colour under a translucent canopy tint.
+  if (position.inferred) {
+    svgElement('rect', { x: position.x, y: position.y, width: position.width, height: position.height, rx: 2, class: 'bed-canopy-tint' }, group);
+  }
   const horizontal = position.width > position.height;
-  addText(group, String(bed.bed), centerX, horizontal ? centerY + 0.5 : centerY + 5, 'bed-number');
-  addText(group, result.confirm ? '!' : result.icon,
-    horizontal ? position.x + position.width - 8 : centerX,
-    horizontal ? centerY + 0.5 : position.y + 10, 'bed-state-icon');
-  if (result.moistureReached) {
+  // State letters only where the bed is big enough to hold them; colour carries the state elsewhere.
+  const long = Math.max(position.width, position.height) >= 60 && Math.min(position.width, position.height) >= 12;
+  const narrow = !horizontal && position.width < 16;
+  const labelY = horizontal ? centerY : centerY + (long ? 5 : 0);
+  const fontSize = Math.min(9, Math.max(7, Math.min(position.width, position.height) * 0.85));
+  const pillWidth = String(bed.bed).length * fontSize * 0.6 + 3;
+  svgElement('rect', {
+    x: centerX - pillWidth / 2, y: labelY - fontSize / 2 - 0.5, width: pillWidth, height: fontSize + 1, rx: 1.5,
+    class: `bed-label-bg state-${result.state}`
+  }, group);
+  addText(group, String(bed.bed), centerX, labelY + 0.5, 'bed-number', { style: `font-size:${fontSize}px` });
+  if (long) {
+    addText(group, result.confirm ? '!' : result.icon,
+      horizontal ? position.x + position.width - 8 : centerX,
+      horizontal ? centerY + 0.5 : position.y + 10, 'bed-state-icon');
+  }
+  if (result.moistureReached && long) {
     addText(group, '✓', horizontal ? position.x + 8 : centerX,
       horizontal ? centerY + 0.5 : position.y + position.height - 7, 'bed-moisture-icon');
   }
@@ -317,14 +302,14 @@ function drawBed(map, position, bed) {
   group.addEventListener('focus', () => showTooltip(bed, result, null, group));
   group.addEventListener('blur', hideTooltip);
   group.addEventListener('click', (event) => {
-    selectBed(bed.bed, appState.history);
+    selectBed(bed.bed);
     if (isMobileLayout()) openBedSheet(bed, result);
     else if (event.pointerType === 'touch') showTooltip(bed, result, event);
   });
   group.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      selectBed(bed.bed, appState.history);
+      selectBed(bed.bed);
       if (isMobileLayout()) openBedSheet(bed, result);
     }
   });
@@ -348,7 +333,7 @@ function renderBedGrid(beds) {
     button.innerHTML = `<strong>${bed.bed}</strong><span class="grid-bed-icon" aria-hidden="true">${escapeHtml(result.confirm ? '!' : result.icon)}</span>` +
       `<small>${escapeHtml(age || result.label)}</small>`;
     button.addEventListener('click', () => {
-      selectBed(bed.bed, appState.history);
+      selectBed(bed.bed);
       openBedSheet(bed, result);
     });
     grid.appendChild(button);
@@ -380,6 +365,7 @@ function applyMobileView() {
     button.tabIndex = button.dataset.view === appState.mobileView ? 0 : -1;
   });
   document.getElementById('map-frame').style.setProperty('--zoom', String(appState.zoom));
+  document.getElementById('pan-hint').hidden = !mobile || !map || appState.zoom <= 1 || appState.panHintSeen;
 }
 
 function setZoom(next) {
@@ -404,11 +390,20 @@ function setupMobileControls() {
   document.getElementById('zoom-in').addEventListener('click', () => setZoom(appState.zoom + 0.75));
   document.getElementById('zoom-out').addEventListener('click', () => setZoom(appState.zoom - 0.75));
   window.matchMedia('(max-width: 720px)').addEventListener('change', () => { closeBedSheet(); applyMobileView(); });
+  ['pointerdown', 'wheel'].forEach((type) => document.getElementById('map-frame').addEventListener(type, () => {
+    if (appState.panHintSeen) return;
+    appState.panHintSeen = true;
+    document.getElementById('pan-hint').hidden = true;
+  }, { passive: true }));
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(fitRail, 150);
+  });
   applyMobileView();
 }
 
 function tooltipHtml(bed, result) {
-  const day14 = bed.loadDate ? addCalendarDays(bed.loadDate, DRYING_DAYS) : null;
   const badges = [];
   if (result.confirm) badges.push(`<span class="inline-status confirm">${escapeHtml(t('status.confirmNeeded'))}</span>`);
   if (result.moistureReached) badges.push(`<span class="inline-status reached">${escapeHtml(t('status.moistureReached'))}</span>`);
@@ -417,9 +412,8 @@ function tooltipHtml(bed, result) {
     `<span class="tooltip-reason">${escapeHtml(result.reason)}</span>`,
     '<dl>',
     `<div><dt>${escapeHtml(t('detail.dateIn'))}</dt><dd>${escapeHtml(loadDateText(bed))}</dd></div>`,
-    `<div><dt>${escapeHtml(t('detail.inUse'))}</dt><dd>${escapeHtml(inUseText(bed.inUse))}</dd></div>`,
+    `<div><dt>${escapeHtml(t('detail.dateOut'))}</dt><dd>${escapeHtml(dateOutText(bed))}</dd></div>`,
     `<div><dt>${escapeHtml(t('detail.elapsed'))}</dt><dd>${result.age === null ? '—' : escapeHtml(t('state.days', { count: result.age }))}<small>${escapeHtml(t('detail.notDryness'))}</small></dd></div>`,
-    `<div><dt>${escapeHtml(t('detail.day14'))}</dt><dd>${day14 ? escapeHtml(displayDate(day14)) : '—'}</dd></div>`,
     `<div><dt>${escapeHtml(t('detail.moisture'))}</dt><dd>${escapeHtml(displayMoisture(bed.moisturePercent))}</dd></div>`,
     '</dl>',
     badges.length ? `<div class="tooltip-badges">${badges.join('')}</div>` : ''
@@ -463,18 +457,21 @@ function hideTooltip() {
   document.getElementById('map-tooltip').hidden = true;
 }
 
-export function selectBed(id, recordsByBed = appState.history) {
+function markSelected(id) {
   const map = document.getElementById('yard-map');
   map.querySelectorAll('.bed-cell.selected').forEach((cell) => cell.classList.remove('selected'));
   const cell = map.querySelector(`[data-bed="${id}"]`);
   if (cell) cell.classList.add('selected');
+}
+
+export function selectBed(id, recordsByBed = appState.history) {
+  markSelected(id);
   appState.selectedBed = id;
   const bed = appState.bedById.get(id);
   if (!bed) return;
   const result = classifyBed(bed);
   const matches = (recordsByBed.get(id) || []).slice()
     .sort((left, right) => (isoDate(right.dryer_date_in) || '').localeCompare(isoDate(left.dryer_date_in) || ''));
-  const day14 = bed.loadDate ? addCalendarDays(bed.loadDate, DRYING_DAYS) : null;
   const badge = document.getElementById('selected-badge');
   document.getElementById('selected-title').textContent = `${t('bed.name')} ${id}`;
   badge.textContent = statusText(result);
@@ -498,9 +495,9 @@ export function selectBed(id, recordsByBed = appState.history) {
       `<p class="status-reason"><span aria-hidden="true">${escapeHtml(result.icon)}</span> ${escapeHtml(result.reason)}</p>` +
       '<dl class="detail-grid">' +
         `<div class="detail-item"><dt>${escapeHtml(t('detail.dateIn'))}</dt><dd>${escapeHtml(loadDateText(bed))}</dd></div>` +
-        `<div class="detail-item"><dt>${escapeHtml(t('detail.inUse'))}</dt><dd>${escapeHtml(inUseText(bed.inUse))}</dd></div>` +
+        `<div class="detail-item"><dt>${escapeHtml(t('detail.dateOut'))}</dt><dd>${escapeHtml(dateOutText(bed))}</dd></div>` +
         `<div class="detail-item"><dt>${escapeHtml(t('detail.elapsed'))}</dt><dd>${result.age === null ? '—' : escapeHtml(t('state.days', { count: result.age }))}<small>${escapeHtml(t('detail.notDrynessShort'))}</small></dd></div>` +
-        `<div class="detail-item"><dt>${escapeHtml(t('detail.day14'))}</dt><dd>${day14 ? escapeHtml(displayDate(day14)) : '—'}</dd></div>` +
+        `<div class="detail-item"><dt>${escapeHtml(t('detail.inUse'))}</dt><dd>${escapeHtml(inUseText(bed.inUse))}</dd></div>` +
         `<div class="detail-item detail-wide"><dt>${escapeHtml(t('detail.moisture'))}</dt><dd>${escapeHtml(displayMoisture(bed.moisturePercent))}</dd></div>` +
       '</dl>' +
       (currentFlags.length ? `<div class="detail-flags">${currentFlags.join('')}</div>` : '') +
@@ -512,171 +509,469 @@ export function selectBed(id, recordsByBed = appState.history) {
 
 export function renderRecords(records) {
   const container = document.getElementById('recent-records');
+  const data = currentData();
   document.getElementById('record-count').textContent = t('history.count', { count: records.length });
-  if (appState.snapshotFailed) {
+  if (data.status === 'loading') {
+    container.innerHTML = `<p class="empty-detail">${escapeHtml(t('history.loading'))}</p>`;
+    return;
+  }
+  if (!data.live && !data.snapshotAvailable) {
     container.innerHTML = `<p class="empty-detail">${escapeHtml(t('data.historyFailed'))}</p>`;
     return;
   }
-  const dated = records.filter((record) => isoDate(record.dryer_date_in))
+  // A Date In after today is a typo (often day and month swapped), so it is counted but not listed.
+  const withDate = records.filter((record) => isoDate(record.dryer_date_in));
+  const dated = withDate.filter((record) => isoDate(record.dryer_date_in) <= appState.todayIso)
     .sort((left, right) => isoDate(right.dryer_date_in).localeCompare(isoDate(left.dryer_date_in)));
+  const future = withDate.length - dated.length;
   if (!dated.length) {
     container.innerHTML = `<p class="empty-detail">${escapeHtml(t('history.noDated'))}</p>`;
     return;
   }
   container.innerHTML =
-    `<div class="record-row header"><span>${escapeHtml(t('history.headerIn'))}</span><span>${escapeHtml(t('history.headerBed'))}</span><span>${escapeHtml(t('history.headerLot'))}</span><span>${escapeHtml(t('history.headerMoisture'))}</span></div>` +
+    `<div class="record-row header"><span>${escapeHtml(t('history.headerIn'))}</span><span>${escapeHtml(t('history.headerOut'))}</span><span>${escapeHtml(t('history.headerBed'))}</span><span>${escapeHtml(t('history.headerLot'))}</span><span>${escapeHtml(t('history.headerMoisture'))}</span></div>` +
     dated.slice(0, 8).map((record) =>
       '<div class="record-row">' +
         `<strong>${escapeHtml(displayDate(record.dryer_date_in))}</strong>` +
+        `<span>${escapeHtml(displayDate(record.dryer_date_out))}</span>` +
         `<span>${escapeHtml(record.table_numbers || '—')}</span>` +
         `<span>${escapeHtml(record.storage_lot_no || record.storage_lot || '—')}</span>` +
         `<span>${escapeHtml(record.moisture_percent ? `${record.moisture_percent}%` : '—')}</span>` +
       '</div>'
     ).join('') +
-    `<p class="records-note">${escapeHtml(t('history.note'))}</p>`;
+    `<p class="records-note">${escapeHtml(t('history.note'))}${future ? ` ${escapeHtml(t('history.futureHidden', { count: future }))}` : ''}</p>`;
 }
 
-function renderSummary(beds) {
+function stateCounts(beds) {
   const results = beds.map((bed) => classifyBed(bed));
-  const counts = {
+  return {
     green: results.filter((result) => result.state === 'green').length,
     orange: results.filter((result) => result.state === 'orange').length,
     red: results.filter((result) => result.state === 'red').length,
     confirm: results.filter((result) => result.confirm).length,
     empty: results.filter((result) => result.state === 'empty').length,
-    unknown: results.filter((result) => result.state === 'unknown' || result.state === 'invalid').length,
+    unknown: results.filter((result) => result.state === 'unknown').length,
     invalid: results.filter((result) => result.state === 'invalid').length
   };
-  const items = [
+}
+
+function inUseCount(beds) {
+  return beds.length && beds.every((bed) => bed.inUse !== null) ? beds.filter((bed) => bed.inUse).length : null;
+}
+
+function bedChips(numbers, limit = 8) {
+  const shown = numbers.slice(0, limit).map((number) =>
+    `<button type="button" class="bed-chip" data-select-bed="${number}">${number}</button>`).join('');
+  const more = numbers.length > limit ? `<span class="bed-chip-more">${escapeHtml(t('rail.more', { count: numbers.length - limit }))}</span>` : '';
+  return shown + more;
+}
+
+// In-use beds grouped by Date In, oldest first, with the planned Date Out (Date In + drying days).
+function dueGroups(beds) {
+  const groups = new Map();
+  beds.filter((bed) => bed.inUse && bed.loadDate).forEach((bed) => {
+    if (!groups.has(bed.loadDate)) groups.set(bed.loadDate, []);
+    groups.get(bed.loadDate).push(bed.bed);
+  });
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))
+    .map(([dateIn, numbers]) => ({ dateIn, numbers, plannedOut: addCalendarDays(dateIn, DRYING_DAYS), age: elapsedDays(dateIn) }));
+}
+
+// Tables cleared per Date Out, newest first. Future dates are typos and are left out.
+function outGroups(records) {
+  const groups = new Map();
+  records.forEach((record) => {
+    const dateOut = isoDate(record.dryer_date_out);
+    if (!dateOut || dateOut > appState.todayIso) return;
+    if (!groups.has(dateOut)) groups.set(dateOut, new Set());
+    const numbers = bedIds(record.table_numbers);
+    if (numbers.length) numbers.forEach((number) => groups.get(dateOut).add(number));
+  });
+  return [...groups.entries()].filter(([, numbers]) => numbers.size)
+    .sort(([left], [right]) => right.localeCompare(left))
+    .map(([dateOut, numbers]) => ({ dateOut, numbers: [...numbers].sort((a, b) => a - b), ago: elapsedDays(dateOut) }));
+}
+
+function dueLabel(group) {
+  if (group.age === null || group.age < 0) return { text: '—', tone: 'invalid' };
+  const left = DRYING_DAYS - group.age;
+  // Red only once the planned Date Out is reached; orange for the last two days before it.
+  if (left > 2) return { text: t('rail.daysLeft', { count: left }), tone: 'neutral' };
+  if (left > 0) return { text: t('rail.daysLeft', { count: left }), tone: 'orange' };
+  if (left === 0) return { text: t('rail.dueToday'), tone: 'red' };
+  return { text: t('rail.daysOver', { count: -left }), tone: 'red' };
+}
+
+function shortDate(iso) {
+  return iso ? iso.slice(5) : '—';
+}
+
+// In-use beds that have reached their planned Date Out (Date In + drying days) or gone past it.
+function pastPlannedOut(beds) {
+  return beds.filter((bed) => bed.inUse && bed.loadDate && (elapsedDays(bed.loadDate) ?? -1) >= DRYING_DAYS).length;
+}
+
+function renderRail(beds, records, limit = RAIL_MAX_GROUPS) {
+  const site = appState.site;
+  const data = currentData();
+  const counts = stateCounts(beds);
+  const used = inUseCount(beds);
+  const percent = used === null ? null : Math.round((used / site.bedCount) * 100);
+  const segments = [['green', counts.green], ['orange', counts.orange], ['red', counts.red], ['invalid', counts.invalid], ['empty', counts.empty], ['unknown', counts.unknown]]
+    .filter(([, value]) => value > 0)
+    .map(([state, value]) => `<span class="state-bar-seg state-${state}" style="flex-grow:${value}" title="${escapeHtml(stateMeta(state).label)} ${value}"></span>`).join('');
+  const stateRows = [
     ['green', 'G', t('state.greenShort'), counts.green, t('state.days', { count: `0–${AGE_GREEN_MAX}` })],
     ['orange', 'O', t('state.orangeShort'), counts.orange, t('state.days', { count: `${AGE_GREEN_MAX + 1}–${AGE_ORANGE_MAX}` })],
     ['red', 'R', t('state.redShort'), counts.red, t('state.daysPlus', { count: AGE_ORANGE_MAX + 1 })],
     ['confirm', '!', t('state.confirmShort'), counts.confirm, t('state.confirmRule', { days: DRYING_DAYS, target: MOISTURE_TARGET })],
     ['empty', '○', t('state.emptyShort'), counts.empty, t('state.emptyRule')],
-    ['unknown', '?', t('state.unknownShort'), counts.unknown,
+    ['unknown', '?', t('state.unknownShort'), counts.unknown + counts.invalid,
       counts.invalid ? t('state.includesInvalid', { count: counts.invalid }) : t('state.noCurrent')]
   ];
-  document.getElementById('state-summary').innerHTML = items.map(([state, icon, label, value, note]) =>
-    `<article class="state-count-card state-${state}"><span class="state-count-icon" aria-hidden="true">${icon}</span>` +
-      `<div><span>${escapeHtml(label)}</span><strong>${value}</strong><small>${escapeHtml(note)}</small></div></article>`
-  ).join('');
-  const inUseKnown = beds.every((bed) => bed.inUse !== null);
-  const inUseCount = inUseKnown ? beds.filter((bed) => bed.inUse).length : null;
-  document.getElementById('occupancy-label').textContent = t('summary.inUse');
-  document.getElementById('occupancy-value').textContent = inUseCount === null ? t('value.unknown') : inUseCount;
-  document.getElementById('occupancy-unit').textContent = inUseCount === null ? '' : `/ ${BED_COUNT}`;
-  document.getElementById('occupancy-note').textContent = inUseCount === null
-    ? t('summary.inUseUnknown')
-    : t('summary.inUseKnown', { count: BED_COUNT, threshold: OCCUPANCY_ALERT });
-  document.getElementById('occupancy-alert').hidden = inUseCount === null || (inUseCount / BED_COUNT) * 100 < OCCUPANCY_ALERT;
+
+  let dueHtml;
+  if (data.status === 'loading') dueHtml = `<p class="rail-empty">${escapeHtml(t('rail.loading'))}</p>`;
+  else if (used === null) dueHtml = `<p class="rail-empty">${escapeHtml(t('rail.dueUnknown'))}</p>`;
+  else {
+    const groups = dueGroups(beds);
+    const shown = appState.railExpanded ? groups.length : limit;
+    const over = pastPlannedOut(beds);
+    dueHtml = groups.length
+      ? `<p class="rail-total${over ? ' is-over' : ''}">${escapeHtml(t('rail.dueTotal', { over, count: used, days: DRYING_DAYS }))}</p>` +
+        `<ol class="event-list">${groups.slice(0, shown).map((group) => {
+        const label = dueLabel(group);
+        return `<li class="event-item"><div class="event-dates" title="${escapeHtml(`${group.dateIn} → ${group.plannedOut || '—'}`)}">` +
+          `<span>${escapeHtml(t('rail.in', { date: shortDate(group.dateIn) }))}</span><span class="event-arrow" aria-hidden="true">→</span>` +
+          `<strong>${escapeHtml(t('rail.out', { date: shortDate(group.plannedOut) }))}</strong></div>` +
+          `<span class="event-tag tone-${label.tone}">${escapeHtml(label.text)}</span>` +
+          `<div class="event-beds">${bedChips(group.numbers)}</div></li>`;
+      }).join('')}</ol>` +
+        (groups.length > shown || appState.railExpanded
+          ? `<button type="button" class="rail-more" data-rail-toggle>${escapeHtml(appState.railExpanded ? t('rail.showFewer') : t('rail.showAll', { count: groups.length }))}</button>` : '')
+      : `<p class="rail-empty">${escapeHtml(t('rail.dueEmpty'))}</p>`;
+  }
+
+  let outHtml;
+  if (data.status === 'loading') outHtml = `<p class="rail-empty">${escapeHtml(t('rail.loading'))}</p>`;
+  else {
+    const groups = outGroups(records);
+    outHtml = groups.length
+      ? `<ol class="event-list">${groups.slice(0, appState.railExpanded ? RAIL_MAX_GROUPS : limit).map((group) =>
+        `<li class="event-item"><div class="event-dates" title="${escapeHtml(group.dateOut)}"><strong>${escapeHtml(t('rail.out', { date: shortDate(group.dateOut) }))}</strong></div>` +
+          `<span class="event-tag tone-out">${escapeHtml(group.ago === 0 ? t('rail.today') : t('rail.daysAgo', { count: group.ago }))}</span>` +
+          `<div class="event-beds">${bedChips(group.numbers)}</div></li>`).join('')}</ol>`
+      : `<p class="rail-empty">${escapeHtml(t('rail.outEmpty'))}</p>`;
+  }
+
+  document.getElementById('hero-rail').innerHTML =
+    '<section class="rail-block rail-occupancy">' +
+      `<span class="rail-label">${escapeHtml(t('summary.inUse'))}</span>` +
+      `<div class="rail-big"><strong>${used === null ? escapeHtml(t('value.unknown')) : used}</strong>` +
+        (used === null ? '' : `<span>/ ${site.bedCount}</span><em>${percent}%</em>`) + '</div>' +
+      `<div class="state-bar" aria-hidden="true">${segments}</div>` +
+      `<p class="rail-note">${escapeHtml(used === null ? t('summary.inUseUnknown') : t('summary.inUseKnown', { free: counts.empty, threshold: OCCUPANCY_ALERT }))}</p>` +
+      `<ul class="state-list" aria-label="${escapeHtml(t('stateSummary.aria'))}">${stateRows.map(([state, icon, label, value, note]) =>
+        `<li class="state-row state-${state}${value ? '' : ' is-zero'}"><span class="state-row-icon" aria-hidden="true">${icon}</span>` +
+          `<span class="state-row-label">${escapeHtml(label)}<small>${escapeHtml(note)}</small></span><strong>${value}</strong></li>`).join('')}</ul>` +
+    '</section>' +
+    '<section class="rail-block">' +
+      `<h3 class="rail-heading"><span>${escapeHtml(t('rail.dueTitle'))}</span><small>${escapeHtml(t('rail.dueRule', { days: DRYING_DAYS }))}</small></h3>${dueHtml}` +
+    '</section>' +
+    '<section class="rail-block">' +
+      `<h3 class="rail-heading"><span>${escapeHtml(t('rail.outTitle'))}</span><small>${escapeHtml(t('rail.outRule'))}</small></h3>${outHtml}` +
+    '</section>';
+
+  document.getElementById('occupancy-alert').hidden = percent === null || percent < OCCUPANCY_ALERT;
+}
+
+// Beside the map the rail fills the map's height: it shows as many list groups as fit, at least one.
+// Stacked under the map (phones, narrow screens) it shows five.
+function fitRail() {
+  const rail = document.getElementById('hero-rail');
+  const frame = document.getElementById('map-frame');
+  const besideMap = rail.getBoundingClientRect().top - frame.getBoundingClientRect().top < 4;
+  let limit = besideMap && !frame.hidden ? RAIL_MAX_GROUPS : 5;
+  renderRail(appState.beds, appState.records, limit);
+  if (!besideMap || frame.hidden || appState.railExpanded) return;
+  while (limit > RAIL_MIN_GROUPS && rail.scrollHeight > frame.offsetHeight + 2) {
+    limit -= 1;
+    renderRail(appState.beds, appState.records, limit);
+  }
+}
+
+function renderSummary(beds) {
+  const site = appState.site;
+  const inUse = beds.filter((bed) => bed.inUse && bed.loadDate);
+  const ages = inUse.map((bed) => elapsedDays(bed.loadDate)).filter((age) => age !== null && age >= 0);
+  const known = inUseCount(beds) !== null;
+  const average = ages.length ? Math.round(ages.reduce((sum, age) => sum + age, 0) / ages.length) : null;
+  const oldest = inUse.slice().sort((left, right) => left.loadDate.localeCompare(right.loadDate))[0];
+  const oldestAge = oldest ? elapsedDays(oldest.loadDate) : null;
+  const due = pastPlannedOut(beds);
+  const cards = [
+    ['capacity', t('summary.capacity'), site.bedCount, t('summary.beds'),
+      site.nylex ? t('summary.nylex', site.nylex) : t('summary.nylexNone')],
+    ['average', t('summary.avgDays'), known && average !== null ? average : '—', known && average !== null ? t('summary.days') : '',
+      known ? t('summary.avgNote', { count: ages.length }) : t('summary.needsLive')],
+    ['oldest', t('summary.oldest'), known && oldestAge !== null ? oldestAge : '—', known && oldestAge !== null ? t('summary.days') : '',
+      known && oldest ? t('summary.oldestNote', { bed: oldest.bed, date: oldest.loadDate }) : t('summary.needsLive')],
+    ['due', t('summary.due', { days: DRYING_DAYS }), known ? due : '—', known ? t('summary.beds') : '',
+      known ? t('summary.dueNote', { days: DRYING_DAYS }) : t('summary.needsLive')]
+  ];
+  const grid = document.getElementById('summary-grid');
+  grid.setAttribute('aria-label', t('summary.aria', { site: siteName() }));
+  grid.innerHTML = cards.map(([kind, label, value, unit, note]) =>
+    `<article class="summary-card summary-${kind}"><span class="summary-label">${escapeHtml(label)}</span>` +
+      `<strong>${escapeHtml(value)}</strong><span class="summary-unit">${escapeHtml(unit)}</span>` +
+      `<small>${escapeHtml(note)}</small></article>`).join('');
 }
 
 function applyConfigCopy() {
-  document.getElementById('capacity-value').textContent = BED_COUNT;
   document.getElementById('legend-green-copy').textContent = t('legend.green', { greenMax: AGE_GREEN_MAX });
   document.getElementById('legend-orange-copy').textContent = t('legend.orange', { orangeMin: AGE_GREEN_MAX + 1, orangeMax: AGE_ORANGE_MAX });
   document.getElementById('legend-red-copy').textContent = t('legend.red', { redMin: AGE_ORANGE_MAX + 1 });
   document.getElementById('legend-confirm-copy').textContent = t('legend.confirm', { dryingDays: DRYING_DAYS, target: MOISTURE_TARGET });
   document.getElementById('footer-threshold-copy').textContent = t('footer.threshold', { days: DRYING_DAYS });
   document.getElementById('occupancy-alert-text').textContent = t('occupancy.alert', { threshold: OCCUPANCY_ALERT });
-  document.getElementById('yard-map').setAttribute('aria-label', t('map.aria', { count: BED_COUNT }));
+}
+
+function applySiteCopy() {
+  const site = appState.site;
+  const name = siteName();
+  document.title = t('page.title', { site: name });
+  document.getElementById('site-title').textContent = name;
+  document.getElementById('footer-site').textContent = t('footer.snapshot', { site: name });
+  const noteKey = `map.note.${site.id}`;
+  document.getElementById('map-site-note').textContent = t(noteKey, { count: site.bedCount });
+  document.getElementById('legend-inferred').hidden = site.id !== 'bergfrieden';
+  document.getElementById('legend-unlocated').hidden = site.id !== 'tingatinga';
+}
+
+function currentData() {
+  return appState.sites.get(appState.site.id) || { status: 'loading' };
 }
 
 function updateSnapshotUi() {
   const snapshot = document.getElementById('snapshot-date');
-  if (appState.live) snapshot.textContent = t('snapshot.live');
-  else if (appState.snapshotFailed) snapshot.textContent = t('snapshot.failed');
-  else if (appState.snapshotAvailable) {
-    snapshot.textContent = t('snapshot.label', { date: appState.sourceInfo.snapshot_date || t('snapshot.unknown') });
-  } else snapshot.textContent = t('loading.csv');
+  const data = currentData();
+  snapshot.className = 'snapshot-date';
+  if (data.status === 'loading') snapshot.textContent = t('loading.csv');
+  else if (data.live) { snapshot.textContent = t('snapshot.live', { tab: appState.site.tab }); snapshot.classList.add('is-live'); }
+  else if (data.snapshotAvailable) snapshot.textContent = t('snapshot.label', { date: data.sourceInfo.snapshot_date || t('snapshot.unknown') });
+  else { snapshot.textContent = t('snapshot.failed'); snapshot.classList.add('is-failed'); }
 }
 
 function renderDataAlert() {
   const alert = document.getElementById('data-alert');
   const status = document.getElementById('data-alert-text');
+  const data = currentData();
+  const site = appState.site;
   alert.className = 'data-alert';
-  if (appState.currentFailed) {
-    alert.classList.add('data-alert-error');
-    status.textContent = t('data.currentFailed');
-  } else if (appState.live) {
-    const warnings = appState.liveWarnings || { unparsedOpenRows: 0, outOfRangeTables: [] };
-    const notes = [t('data.live')];
+  if (data.status === 'loading') {
+    status.textContent = t('data.checking', { site: siteName() });
+  } else if (data.live) {
+    const warnings = data.warnings || { unparsedOpenRows: 0, outOfRangeTables: [] };
+    const notes = [t('data.live', { site: siteName(), tab: site.tab })];
     if (warnings.unparsedOpenRows) notes.push(t('data.liveUnparsed', { count: warnings.unparsedOpenRows }));
-    if (warnings.outOfRangeTables.length) notes.push(t('data.liveOutOfRange', { tables: warnings.outOfRangeTables.join(', '), beds: BED_COUNT }));
+    if (warnings.outOfRangeTables.length) notes.push(t('data.liveOutOfRange', { tables: compactRanges(warnings.outOfRangeTables), beds: site.bedCount }));
     if (warnings.unparsedOpenRows || warnings.outOfRangeTables.length) alert.classList.add('data-alert-warning');
     status.textContent = notes.join(' ');
-  } else if (appState.snapshotAvailable) {
+  } else if (data.liveFailed && data.snapshotAvailable) {
+    alert.classList.add('data-alert-error');
+    status.textContent = t('data.currentFailed');
+  } else if (data.snapshotAvailable) {
     alert.classList.add('data-alert-warning');
     status.textContent = t('data.snapshot', {
-      count: appState.records.length,
-      date: appState.sourceInfo.snapshot_date || t('value.unknown'),
-      beds: BED_COUNT
+      site: siteName(), count: data.records.length,
+      date: data.sourceInfo.snapshot_date || t('value.unknown'), beds: site.bedCount
     });
   } else {
     alert.classList.add('data-alert-error');
-    status.textContent = t('data.snapshotFailed');
+    status.textContent = t('data.loadFailed', { site: siteName() });
   }
 }
 
+// 28, 31, 32, 33, 40 -> "28, 31–33, 40"
+function compactRanges(numbers) {
+  const parts = [];
+  numbers.forEach((number, index) => {
+    if (index && number === numbers[index - 1] + 1) parts[parts.length - 1][1] = number;
+    else parts.push([number, number]);
+  });
+  return parts.map(([from, to]) => (from === to ? String(from) : `${from}–${to}`)).join(', ');
+}
+
 function updateSourceLinks() {
-  const href = appState.live ? CURRENT_STATUS_SHEET_URL : './data/shah-drying-records.csv';
+  const data = currentData();
+  const site = appState.site;
+  const live = Boolean(data.live || (!data.snapshotAvailable && site.sheetUrl));
+  const href = live ? site.sheetUrl : site.snapshotCsvUrl;
   document.querySelectorAll('.source-link, .text-link').forEach((link) => {
+    link.hidden = !href;
+    if (!href) return;
     link.href = href;
-    if (appState.live) { link.target = '_blank'; link.rel = 'noopener'; }
+    if (live) { link.target = '_blank'; link.rel = 'noopener'; }
     else { link.removeAttribute('target'); link.removeAttribute('rel'); }
     const label = link.querySelector('[data-i18n]');
     if (label) {
       label.dataset.i18n = link.classList.contains('source-link')
-        ? (appState.live ? 'source.openSheet' : 'source.open')
-        : (appState.live ? 'history.openSheet' : 'history.openAll');
-      label.textContent = t(label.dataset.i18n);
+        ? (live ? 'source.openSheet' : 'source.open')
+        : (live ? 'history.openSheet' : 'history.openAll');
+      label.textContent = t(label.dataset.i18n, { tab: site.tab });
     }
   });
 }
 
-async function renderMode() {
-  let current;
-  appState.currentFailed = false;
-  appState.live = false;
-  appState.liveWarnings = null;
-  appState.history = appState.snapshotHistory;
-  appState.records = appState.snapshotRecords;
-  if (CURRENT_STATUS_URL) {
-    current = await liveAdapter();
-    appState.live = true;
-    appState.liveWarnings = current.warnings;
-    appState.history = current.history;
-    appState.records = current.records;
-  } else current = { beds: appState.snapshotBeds };
-  appState.beds = current.beds;
-  appState.bedById = new Map(current.beds.map((bed) => [bed.bed, bed]));
+function renderSiteTabs() {
+  document.querySelectorAll('#site-tabs [data-site]').forEach((tab) => {
+    const site = SITES.find((entry) => entry.id === tab.dataset.site);
+    const data = appState.sites.get(site.id);
+    const selected = site.id === appState.site.id;
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    tab.querySelector('.site-tab-name').textContent = siteName(site);
+    const count = tab.querySelector('.site-tab-count');
+    const used = data && data.status === 'ready' ? inUseCount(data.beds) : null;
+    count.textContent = `${used === null ? '–' : used}/${site.bedCount}`;
+    count.classList.toggle('is-live', used !== null);
+    count.title = used === null ? t('tabs.capacity', { count: site.bedCount }) : t('tabs.inUse', { used, count: site.bedCount });
+  });
+}
+
+function renderCurrentSite() {
+  const site = appState.site;
+  const data = currentData();
+  const beds = data.status === 'ready' ? data.beds : emptyBeds(site.bedCount, 'loading');
+  appState.beds = beds;
+  appState.bedById = new Map(beds.map((bed) => [bed.bed, bed]));
+  appState.history = data.history || new Map();
+  appState.records = data.records || [];
+  applySiteCopy();
   updateSnapshotUi();
   updateSourceLinks();
+  renderSiteTabs();
   renderRecords(appState.records);
-  renderSummary(current.beds);
-  buildMap(current.beds);
-  if (appState.selectedBed) selectBed(appState.selectedBed, appState.history);
+  renderSummary(beds);
+  buildMap(beds);
+  fitRail();
+  if (appState.selectedBed && appState.bedById.has(appState.selectedBed)) selectBed(appState.selectedBed);
+  else resetSelection();
   renderDataAlert();
+}
+
+function resetSelection() {
+  appState.selectedBed = null;
+  document.getElementById('selected-title').textContent = t('detail.select');
+  const badge = document.getElementById('selected-badge');
+  badge.className = 'state-badge state-unknown';
+  badge.textContent = t('status.unselected');
+  document.getElementById('selected-detail').innerHTML = `<p class="empty-detail">${escapeHtml(t('detail.empty'))}</p>`;
+}
+
+async function loadSite(site) {
+  const data = {
+    status: 'ready', beds: emptyBeds(site.bedCount, 'unknown'), history: new Map(), records: [],
+    live: false, warnings: null, liveFailed: false, snapshotAvailable: false, sourceInfo: {}
+  };
+  if (site.statusUrl) {
+    try {
+      const live = await liveAdapter(site, appState.todayIso);
+      return Object.assign(data, { beds: live.beds, history: live.history, records: live.records, live: true, warnings: live.warnings });
+    } catch (error) {
+      console.error(error);
+      data.liveFailed = true;
+    }
+  }
+  if (site.snapshotCsvUrl) {
+    try {
+      const snapshot = await snapshotAdapter(site);
+      Object.assign(data, { beds: snapshot.beds, history: snapshot.history, records: snapshot.records, snapshotAvailable: true, sourceInfo: snapshot.sourceInfo });
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  return data;
+}
+
+function chooseSite(id, { updateUrl = true, focus = false } = {}) {
+  const site = SITES.find((entry) => entry.id === id);
+  if (!site) return;
+  const changed = site.id !== appState.site.id;
+  appState.site = site;
+  try { window.localStorage.setItem(SITE_STORAGE_KEY, site.id); } catch (error) {
+    console.warn('Site preference could not be saved.', error);
+  }
+  if (updateUrl) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('site', site.id);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+  }
+  if (changed) {
+    appState.selectedBed = null;
+    appState.railExpanded = false;
+    appState.panHintSeen = false;
+    appState.zoom = site.mobileZoom;
+    closeBedSheet();
+    hideTooltip();
+    const frame = document.getElementById('map-frame');
+    frame.scrollLeft = 0;
+    frame.scrollTop = 0;
+    applyMobileView();
+  }
+  renderCurrentSite();
+  if (focus) document.querySelector(`#site-tabs [data-site="${site.id}"]`).focus();
+}
+
+function setupSiteTabs() {
+  const tabs = document.getElementById('site-tabs');
+  tabs.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-site]');
+    if (tab) chooseSite(tab.dataset.site);
+  });
+  tabs.addEventListener('keydown', (event) => {
+    const ids = SITES.map((site) => site.id);
+    const index = ids.indexOf(appState.site.id);
+    let next = index;
+    if (event.key === 'ArrowRight') next = (index + 1) % ids.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + ids.length) % ids.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = ids.length - 1;
+    else return;
+    event.preventDefault();
+    chooseSite(ids[next], { focus: true });
+  });
+  document.getElementById('hero-rail').addEventListener('click', (event) => {
+    if (event.target.closest('[data-rail-toggle]')) {
+      appState.railExpanded = !appState.railExpanded;
+      fitRail();
+      return;
+    }
+    const chip = event.target.closest('[data-select-bed]');
+    if (!chip) return;
+    const id = Number(chip.dataset.selectBed);
+    selectBed(id);
+    const bed = appState.bedById.get(id);
+    if (isMobileLayout() && bed) openBedSheet(bed, classifyBed(bed));
+  });
+}
+
+function resolveInitialSite() {
+  const querySite = new URLSearchParams(window.location.search).get('site');
+  if (SITES.some((site) => site.id === querySite)) return querySite;
+  try {
+    const stored = window.localStorage.getItem(SITE_STORAGE_KEY);
+    if (SITES.some((site) => site.id === stored)) return stored;
+  } catch (error) {
+    console.warn('Site preference is unavailable.', error);
+  }
+  return DEFAULT_SITE;
 }
 
 function rerenderLanguage() {
   applyTranslations();
   applyConfigCopy();
-  updateSnapshotUi();
-  renderRecords(appState.records);
-  if (appState.beds.length) {
-    renderSummary(appState.beds);
-    buildMap(appState.beds);
-    if (appState.selectedBed) selectBed(appState.selectedBed, appState.history);
-  }
-  renderDataAlert();
-}
-
-function fallbackSnapshotBeds() {
-  return Array.from({ length: BED_COUNT }, (_, index) => ({
-    bed: index + 1, loadDate: null, loadDateRaw: '', inUse: null,
-    moisturePercent: null, source: 'snapshot'
-  }));
+  renderCurrentSite();
 }
 
 function resolveInitialLanguage() {
@@ -737,48 +1032,25 @@ function setupLanguageSwitcher() {
   });
 }
 
-async function initialize() {
+function initialize() {
   setLanguage(resolveInitialLanguage());
   updateLanguageSwitcher(getLanguage());
+  appState.site = SITES.find((site) => site.id === resolveInitialSite());
+  appState.zoom = appState.site.mobileZoom;
   applyTranslations();
   applyConfigCopy();
   setupLanguageSwitcher();
+  setupSiteTabs();
   setupMobileControls();
-
-  try {
-    const [snapshot, infoResponse] = await Promise.all([
-      snapshotAdapter(),
-      fetch('./data/source-info.json', { cache: 'no-store' })
-    ]);
-    if (!infoResponse.ok) throw new Error('Source info HTTP ' + infoResponse.status);
-    appState.sourceInfo = await infoResponse.json();
-    appState.snapshotBeds = snapshot.beds;
-    appState.history = snapshot.history;
-    appState.records = snapshot.records;
-    appState.snapshotHistory = snapshot.history;
-    appState.snapshotRecords = snapshot.records;
-    appState.snapshotAvailable = true;
-  } catch (error) {
-    console.error(error);
-    appState.snapshotFailed = true;
-    appState.snapshotBeds = fallbackSnapshotBeds();
-    appState.history = new Map();
-    appState.records = [];
-  }
-  updateSnapshotUi();
-  renderRecords(appState.records);
-  try {
-    await renderMode();
-  } catch (error) {
-    console.error(error);
-    appState.currentFailed = true;
-    appState.beds = appState.snapshotBeds;
-    appState.bedById = new Map(appState.beds.map((bed) => [bed.bed, bed]));
-    renderSummary(appState.beds);
-    buildMap(appState.beds);
-    renderDataAlert();
-  }
-  appState.initialized = true;
+  renderCurrentSite();
+  // All three tabs load in parallel so the header can show each site's beds in use.
+  SITES.forEach((site) => {
+    loadSite(site).then((data) => {
+      appState.sites.set(site.id, data);
+      if (site.id === appState.site.id) renderCurrentSite();
+      else renderSiteTabs();
+    });
+  });
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') initialize();

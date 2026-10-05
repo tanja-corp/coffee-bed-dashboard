@@ -5,16 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#234638">
-  <title>Shah Coffee Beds | Drying Dashboard</title>
+  <title>Coffee Beds | Drying Dashboard</title>
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="Shah Coffee Beds dashboard" data-i18n-aria="brand.aria">
+    <a class="brand" href="./" aria-label="Coffee drying beds dashboard" data-i18n-aria="brand.aria">
       <span class="brand-mark" aria-hidden="true">C</span>
-      <span data-i18n="brand.name">COFFEE OPERATIONS / SHAH</span>
+      <span data-i18n="brand.name">COFFEE OPERATIONS</span>
     </a>
+    <nav id="site-tabs" class="site-tabs" role="tablist" aria-label="Choose site" data-i18n-aria="tabs.aria">
+      <button type="button" role="tab" class="site-tab" data-site="shah" aria-selected="true" aria-controls="hero">
+        <span class="site-tab-name">Shah</span><span class="site-tab-count">80</span>
+      </button>
+      <button type="button" role="tab" class="site-tab" data-site="bergfrieden" aria-selected="false" aria-controls="hero" tabindex="-1">
+        <span class="site-tab-name">Bergfrieden</span><span class="site-tab-count">45</span>
+      </button>
+      <button type="button" role="tab" class="site-tab" data-site="tingatinga" aria-selected="false" aria-controls="hero" tabindex="-1">
+        <span class="site-tab-name">Tingatinga</span><span class="site-tab-count">25</span>
+      </button>
+    </nav>
     <div class="topbar-tools">
       <div id="language-switcher" class="language-switcher" data-current="en" role="radiogroup" aria-label="Choose language" data-i18n-aria="lang.aria">
         <span class="language-thumb" aria-hidden="true"></span>
@@ -26,12 +37,12 @@
   </header>
 
   <main class="page-shell">
-    <section class="panel map-panel">
+    <section id="hero" class="panel map-panel hero" role="tabpanel">
       <div class="map-toolbar">
         <div class="map-title-group">
           <p class="eyebrow" data-i18n="map.eyebrow">DRYING BED MONITOR</p>
           <div class="map-title-line">
-            <h1 data-i18n="map.title">Coffee bed status</h1>
+            <h1 id="site-title">Shah</h1>
             <span id="snapshot-date" class="snapshot-date" data-i18n="loading.csv">Loading CSV</span>
           </div>
         </div>
@@ -53,11 +64,18 @@
         </div>
       </div>
 
-      <div id="map-frame" class="map-frame">
-        <svg id="yard-map" viewBox="55 30 900 605" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Shah drying site schematic with 80 beds"></svg>
-        <div id="map-tooltip" class="map-tooltip" role="tooltip" hidden></div>
+      <div class="hero-body">
+        <div class="hero-map">
+          <p id="pan-hint" class="pan-hint" data-i18n="map.panHint" hidden>Drag to move the map · − to see all of it</p>
+          <div id="map-frame" class="map-frame">
+            <svg id="yard-map" viewBox="55 30 900 605" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Drying site schematic"></svg>
+            <div id="map-tooltip" class="map-tooltip" role="tooltip" hidden></div>
+          </div>
+          <div id="bed-grid" class="bed-grid" role="group" aria-label="Beds" data-i18n-aria="grid.aria" hidden></div>
+        </div>
+        <aside id="hero-rail" class="hero-rail" aria-live="polite"></aside>
       </div>
-      <div id="bed-grid" class="bed-grid" role="group" aria-label="Beds" data-i18n-aria="grid.aria" hidden></div>
+
       <div class="map-footer">
         <div class="map-legend" aria-label="Map legend" data-i18n-aria="map.legendAria">
           <span><i class="legend-swatch state-green" aria-hidden="true">G</i><span id="legend-green-copy"></span></span>
@@ -67,14 +85,16 @@
           <span><i class="legend-swatch state-empty" aria-hidden="true">○</i><span data-i18n="legend.empty">Empty</span></span>
           <span><i class="legend-swatch state-unknown" aria-hidden="true">?</i><span data-i18n="legend.unknown">Unknown</span></span>
           <span><i class="legend-swatch state-invalid" aria-hidden="true">!</i><span data-i18n="legend.invalid">Invalid date</span></span>
+          <span id="legend-inferred" hidden><i class="legend-swatch legend-inferred" aria-hidden="true"></i><span data-i18n="legend.inferred">Hidden by trees · position inferred</span></span>
+          <span id="legend-unlocated" hidden><i class="legend-swatch legend-unlocated" aria-hidden="true"></i><span data-i18n="legend.unlocated">Not located on the photo</span></span>
         </div>
         <div class="map-notes">
           <span class="approx-badge" data-i18n="map.photoBadge">Photo-based schematic</span>
-          <p><span data-i18n="map.noteSurvey">Photo-based schematic, not a survey.</span> <span data-i18n="map.noteNumbers">Bed numbers have not been confirmed against site numbers.</span></p>
+          <p><span data-i18n="map.noteSurvey">Photo-based schematic, not a survey.</span> <span data-i18n="map.noteNumbers">Bed numbers have not been confirmed against site numbers.</span> <span id="map-site-note"></span></p>
         </div>
         <section id="data-alert" class="data-alert" role="status" aria-live="polite">
           <span class="alert-icon" aria-hidden="true">i</span>
-          <span id="data-alert-text" data-i18n="data.checking">Checking Shah records from the read-only CSV.</span>
+          <span id="data-alert-text">Loading</span>
         </section>
       </div>
     </section>
@@ -84,30 +104,7 @@
       <strong id="occupancy-alert-text"></strong>
     </section>
 
-    <section class="summary-grid" aria-label="Shah facility summary" data-i18n-aria="summary.aria">
-      <article class="summary-card summary-capacity">
-        <span class="summary-label" data-i18n="summary.capacity">BED CAPACITY</span>
-        <strong id="capacity-value">80</strong><span class="summary-unit" data-i18n="summary.beds">beds</span>
-        <small data-i18n="summary.total">Shah · total beds</small>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label" data-i18n="summary.nylexGood">NYLEX · GOOD</span>
-        <strong>15</strong><span class="summary-unit" data-i18n="summary.beds">beds</span>
-        <small data-i18n="summary.good">Facility information · good</small>
-      </article>
-      <article class="summary-card summary-worn">
-        <span class="summary-label" data-i18n="summary.nylexWorn">NYLEX · WORN</span>
-        <strong>65</strong><span class="summary-unit" data-i18n="summary.beds">beds</span>
-        <small data-i18n="summary.worn">Facility information · needs repair</small>
-      </article>
-      <article class="summary-card summary-occupancy">
-        <span id="occupancy-label" class="summary-label"></span>
-        <strong id="occupancy-value"></strong><span id="occupancy-unit" class="summary-unit"></span>
-        <small id="occupancy-note"></small>
-      </article>
-    </section>
-
-    <section id="state-summary" class="state-summary-grid" aria-label="Bed state counts" data-i18n-aria="stateSummary.aria"></section>
+    <section id="summary-grid" class="summary-grid" aria-label="Site summary"></section>
 
     <section class="lower-grid">
       <article class="panel detail-panel">
@@ -141,7 +138,7 @@
     </section>
 
     <footer class="page-footer">
-      <span data-i18n="footer.snapshot">SHAH · Read-only data snapshot</span>
+      <span id="footer-site"></span>
       <span id="footer-threshold-copy"></span>
     </footer>
   </main>

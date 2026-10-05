@@ -1,6 +1,7 @@
 // Reads the Shah tab of the traceability workbook (published as CSV) and turns it into bed states.
 // One row is one lot/grade. A row with Table Nos and no Date Out is treated as still on those tables.
 // Date In is only written on the first row of a lot, so it carries down to the rows below it.
+// A closed row (Date Out filled) is kept per table so an empty table can show when it was last cleared.
 
 function parseRows(text) {
   const rows = [];
@@ -64,7 +65,7 @@ function locateColumns(rows) {
   return null;
 }
 
-export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy' } = {}) {
+export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy', todayIso = null } = {}) {
   const rows = parseRows(text);
   const located = locateColumns(rows);
   if (!located) throw new Error('Tables block (Date In / Table Nos) not found in the sheet');
@@ -73,6 +74,7 @@ export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy' } = {
 
   const records = [];
   const open = new Map();
+  const cleared = new Map();
   const outOfRange = new Set();
   let unparsedOpenRows = 0;
   let carriedDate = '';
@@ -91,9 +93,18 @@ export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy' } = {
       dryer_date_out: isoOut || '', moisture_percent: cell(row, columns.moisture),
       storage_lot_no: cell(row, columns.storageLot), storage_lot: ''
     });
-    if (dateOutRaw) continue;
-
     const tables = tableNumbers(tablesText);
+    if (dateOutRaw) {
+      // Future Date Outs are typos; they still close the row but do not count as the last clearing.
+      if (tables && isoOut && (!todayIso || isoOut <= todayIso)) {
+        tables.forEach((table) => {
+          const previous = cleared.get(table);
+          if (!previous || isoOut > previous.dateOut) cleared.set(table, { dateOut: isoOut, dateIn: isoIn });
+        });
+      }
+      continue;
+    }
+
     if (!tables) { unparsedOpenRows += 1; continue; }
     const entry = { dateRaw: carriedDate, iso: isoIn };
     tables.forEach((table) => {
@@ -115,7 +126,9 @@ export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy' } = {
   const beds = Array.from({ length: bedCount }, (_, offset) => {
     const bed = offset + 1;
     const entries = open.get(bed);
-    if (!entries) return { bed, loadDate: null, loadDateRaw: '', inUse: false, moisturePercent: null, source: 'live' };
+    const last = cleared.get(bed) || null;
+    const lastOut = { lastDateOut: last ? last.dateOut : null, lastDateIn: last ? last.dateIn : null };
+    if (!entries) return { bed, loadDate: null, loadDateRaw: '', inUse: false, moisturePercent: null, source: 'live', ...lastOut };
     const badDate = entries.find((entry) => !entry.iso);
     const dates = entries.map((entry) => entry.iso).filter(Boolean).sort();
     return {
@@ -124,7 +137,8 @@ export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy' } = {
       loadDateRaw: badDate ? (badDate.dateRaw || '—') : dates[0],
       inUse: true,
       moisturePercent: null,
-      source: 'live'
+      source: 'live',
+      ...lastOut
     };
   });
 

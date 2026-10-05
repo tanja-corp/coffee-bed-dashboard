@@ -1,6 +1,14 @@
 # Coffee Bed Dashboard
 
-GitHub Pages project for monitoring Shah's coffee drying beds.
+GitHub Pages project for monitoring coffee drying beds at three sites: Shah (80 beds), Bergfrieden (45 beds) and Tingatinga (25 beds).
+
+## Sites
+
+- The header tabs switch the site. `?site=shah`, `?site=bergfrieden` or `?site=tingatinga` in the URL selects one directly; the last choice is remembered in the browser.
+- Each site reads its own tab of the native "Traceability Record Sheet_2026crop" workbook as CSV in the browser: Shah → `Shah`, Bergfrieden → `BF`, Tingatinga → `TTC`. Site settings (bed count, tab URLs, Nylex counts) are in `SITES` in `site/config.js`. Nothing from the BF or TTC tabs is committed to this repository.
+- The top of each site (the hero) shows the site map and a rail with beds in use, state counts, **Due out** (in-use beds grouped by Date In, with the planned Date Out = Date In + 14 days) and **Recent Date Out** (tables cleared, newest first). Selecting a bed shows its Date In, and either its planned Date Out (still on the bed) or the last Date Out (empty bed).
+- Site maps are in `site/maps.js`. Bergfrieden and Tingatinga are traced in the pixel coordinates of one satellite image each (`Bergfrieden maps for drying beds.png`, `Tingatinga maps for drying beds.png`, not published). Bergfrieden beds 42, 44 and 45 are under trees in the photo and are placed from the row spacing. The Tingatinga photo shows 19 beds; beds 20–25 sit in a "not located" tray until their positions are confirmed. Bed numbers have not been checked against the numbers used on site.
+- The TTC tab currently has open rows (no Date Out) for tables above 25. Those are listed in the warning under the map and are not drawn.
 
 - Public site: https://tanja-corp.github.io/coffee-bed-dashboard/
 - Read-only Shah CSV: https://tanja-corp.github.io/coffee-bed-dashboard/data/shah-drying-records.csv
@@ -67,9 +75,13 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 - `MOISTURE_TARGET`: 実測水分の目安値（推定には使いません）
 - `OCCUPANCY_ALERT`: 使用中ベッドの割合の警告（80床のうち何%以上で出すか）
 
-### ライブ連携（Shahシートを直接読む）
+### ライブ連携（各拠点のタブを直接読む）
 
-ネイティブ版の「Traceability Record Sheet_2026crop」のShahタブを読みます。`site/config.js` の `CURRENT_STATUS_URL` にそのタブのCSV URLを入れると有効になります（`null` の間は、これまでどおり公開スナップショットを表示）。
+ネイティブ版の「Traceability Record Sheet_2026crop」から、拠点ごとに Shah・BF（Bergfrieden）・TTC（Tingatinga）タブを読みます。設定は `site/config.js` の `SITES` にあり、`statusUrl` を `null` にするとその拠点のライブ読み込みを止めます（Shahだけは公開スナップショットに戻ります）。BF・TTCのデータはリポジトリに保存しません。ブラウザがシートから直接読みます。
+
+- ヘッダーのタブで拠点を切り替えます。各タブの数字は「使用中 / 全床」です。
+- 画面上部の右側に「下ろす予定」（乗せた日ごとに、予定日 = 乗せた日 + 14日）と「最近下ろした日」（Date Out の新しい順）を出します。ベッドを選ぶと、使用中なら予定日、空きなら最後に下ろした日を表示します。
+- Date In が今日より後の行は入力ミス（日と月の入れ違い）とみなし、記録一覧には出しません。
 
 - 読むのは Tables ブロックの `Date In`、`Table Nos`、`Date Out`（列は見出しで探すので、列を足しても動きます）。`Occupancy %` 列は使いません。
 - `Table Nos` があり `Date Out` が空の行を「そのテーブルに乗っている」と判断します。`Date In` は各ロットの先頭行にだけあるため、下の行へ引き継ぎます。
@@ -77,7 +89,7 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 - 画面の「使用中ベッド」は、全80床のうちロットが乗っているテーブルの数です（例: 52 / 80）。ライブシートを読めない間は「不明」です。使用中が `OCCUPANCY_ALERT`（%）以上になると警告を出します。
 - 乗っている行が1つもないテーブルは「空き」です。引き払ったら `Date Out` を入れてください。入れ忘れると、そのテーブルは使用中のまま日数が増え、赤になります。
 - 日付は `dd/mm/yyyy`（シートの表示形式）で読みます。年の誤入力（例: 2926）は「日付不正」と表示します。
-- `Table Nos` が `4-15` のような範囲表記の未完了行、または81番以上のテーブルは、マップに載せられないため画面に注意書きが出ます。
+- `Table Nos` が `4-15` のような範囲表記の未完了行、またはその拠点の床数を超える番号のテーブル（Shah 81番以上、BF 46番以上、TTC 26番以上）は、マップに載せられないため画面に注意書きが出ます。
 - ライブ連携中は、記録一覧がシートの内容になり、「CSVを読む」はCSVをダウンロードする代わりに、シートをブラウザで開くリンク（新しいタブ）になります。
 
-ブラウザへサービスアカウント鍵や認証情報を置かないでください。公開するのはShahのタブだけにします。
+ブラウザへサービスアカウント鍵や認証情報を置かないでください。ダッシュボードが読むのは Shah・BF・TTC の3タブです。
