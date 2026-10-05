@@ -40,6 +40,18 @@ function polygon(parent, points, className, attrs) {
   return svgElement('polygon', Object.assign({ points, class: className }, attrs || {}), parent);
 }
 
+// Splits a label into two balanced lines (at a space when there is one, otherwise mid-string).
+function twoLines(text) {
+  const words = text.split(' ');
+  if (words.length < 2) return [text.slice(0, Math.ceil(text.length / 2)), text.slice(Math.ceil(text.length / 2))];
+  let best = 1;
+  for (let index = 1; index < words.length; index += 1) {
+    const diff = (left) => Math.abs(words.slice(0, left).join(' ').length - words.slice(left).join(' ').length);
+    if (diff(index) < diff(best)) best = index;
+  }
+  return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+}
+
 /* ---------- Shah (80 beds, drawn from five aerial/reference photos) ---------- */
 
 function shahLayout() {
@@ -161,7 +173,7 @@ function drawBergfrieden(map, t) {
 
 /* ---------- Tingatinga (25 beds, traced from one satellite image, 514 x 642 px) ---------- */
 // 19 beds are visible in the photo (9 north, 10 south, running about 4° off north).
-// The remaining 6 are listed in a separate tray until their positions are known.
+// The remaining 6 sit in a tray outside the east hedge until their positions are known.
 
 function tingatingaLayout() {
   const north = [117, 134.5, 152, 169.5, 187, 204.5, 222, 239.5, 257]
@@ -169,12 +181,12 @@ function tingatingaLayout() {
   const south = [127, 146, 165, 184, 203, 222, 241, 260, 279, 298]
     .map((cx) => (bed) => column(bed, cx, 425, 230, 14, -3.5));
   const tray = [0, 1, 2, 3, 4, 5]
-    .map((index) => (bed) => column(bed, 128 + index * 34, 690, 46, 18, 0, { unlocated: true }));
+    .map((index) => (bed) => column(bed, 518 + (index % 3) * 28, 368 + Math.floor(index / 3) * 70, 50, 18, 0, { unlocated: true }));
   return numbered([...north, ...south, ...tray]);
 }
 
 function drawTingatinga(map, t) {
-  svgElement('rect', { x: 0, y: -20, width: 514, height: 760, class: 'site-ground' }, map);
+  svgElement('rect', { x: 0, y: -20, width: 640, height: 680, class: 'site-ground' }, map);
   polygon(map, '88,22 420,12 447,250 468,612 102,616 92,300', 'clearing');
   const ground = svgElement('g', { class: 'ground-features' }, map);
   svgElement('path', { d: 'M60 -20 L92 -20 C84 120 98 300 88 420 C82 520 96 590 92 640 L60 640 Z', class: 'canopy' }, ground);
@@ -195,12 +207,12 @@ function drawTingatinga(map, t) {
   addText(map, t('map.zoneNorthBlock'), 100, 16, 'zone-label');
   addText(map, t('map.zoneSouthBlock'), 114, 292, 'zone-label');
 
-  svgElement('rect', { x: 92, y: 640, width: 260, height: 80, rx: 6, class: 'tray' }, map);
-  addText(map, t('map.unlocated'), 104, 656, 'tray-label');
+  svgElement('rect', { x: 488, y: 286, width: 116, height: 200, rx: 6, class: 'tray' }, map);
+  twoLines(t('map.unlocated')).forEach((line, index) => addText(map, line, 546, 306 + index * 14, 'tray-label', { 'text-anchor': 'middle' }));
 }
 
 export const SITE_MAPS = {
   shah: { viewBox: [55, 30, 900, 605], layout: shahLayout, draw: drawShah },
-  bergfrieden: { viewBox: [238, 148, 570, 728], layout: bergfriedenLayout, draw: drawBergfrieden },
-  tingatinga: { viewBox: [62, -8, 420, 738], layout: tingatingaLayout, draw: drawTingatinga }
+  bergfrieden: { viewBox: [244, 156, 562, 718], layout: bergfriedenLayout, draw: drawBergfrieden },
+  tingatinga: { viewBox: [62, -8, 552, 630], layout: tingatingaLayout, draw: drawTingatinga }
 };
