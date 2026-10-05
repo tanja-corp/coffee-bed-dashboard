@@ -7,7 +7,7 @@ function emptyBed(bed, source) {
     bed,
     loadDate: null,
     loadDateRaw: '',
-    occupancyPercent: null,
+    inUse: null,
     moisturePercent: null,
     source
   };

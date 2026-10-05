@@ -158,8 +158,8 @@ function stateMeta(state) {
 }
 
 export function classifyBed(bed) {
-  if (bed.occupancyPercent === 0) return bedResult(bed, 'empty', null);
-  const hasAnyCurrentData = bed.occupancyPercent !== null || bed.loadDate !== null || bed.loadDateRaw || bed.moisturePercent !== null;
+  if (bed.inUse === false) return bedResult(bed, 'empty', null);
+  const hasAnyCurrentData = bed.inUse !== null || bed.loadDate !== null || bed.loadDateRaw || bed.moisturePercent !== null;
   if (!hasAnyCurrentData) return bedResult(bed, 'unknown', null);
   if (!bed.loadDate) return bedResult(bed, 'invalid', null);
   const age = elapsedDays(bed.loadDate);
@@ -175,9 +175,9 @@ function bedResult(bed, state, age) {
   return { state, age, confirm, moistureReached, ...stateMeta(state) };
 }
 
-function displayPercent(value) {
-  if (value === null || !Number.isFinite(value)) return t('value.unknown');
-  return `${Number.isInteger(value) ? value : value.toFixed(1)}%`;
+function inUseText(inUse) {
+  if (inUse === null) return t('value.unknown');
+  return inUse ? t('value.inUse') : t('value.notInUse');
 }
 
 function displayMoisture(value) {
@@ -205,7 +205,7 @@ function ariaLabelForBed(bed, result) {
     bed: bed.bed,
     state: result.label,
     date: loadDateText(bed),
-    occupancy: displayPercent(bed.occupancyPercent),
+    inUse: inUseText(bed.inUse),
     age: result.age === null ? '' : t('bed.ariaAge', { count: result.age }),
     confirm: result.confirm ? t('bed.ariaConfirm') : '',
     moisture: result.moistureReached ? t('bed.ariaMoisture') : ''
@@ -249,9 +249,9 @@ export function bedLayout() {
 
 function drawFacility(map) {
   const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
-  svgElement('polygon', { points: '786,57 849,69 840,128 774,113', class: 'landmark skin-roof' }, facilities);
-  svgElement('polygon', { points: '786,57 817,63 809,120 774,113', class: 'skin-roof-blue' }, facilities);
-  addText(facilities, t('facility.skinDryer'), 810, 48, 'landmark-label-outside');
+  svgElement('polygon', { points: '785,90 843,108 835,162 777,146', class: 'landmark skin-roof' }, facilities);
+  svgElement('polygon', { points: '785,90 814,99 806,154 777,146', class: 'skin-roof-blue' }, facilities);
+  addText(facilities, t('facility.skinDryer'), 811, 178, 'landmark-label-outside');
   svgElement('polygon', { points: '595,228 689,237 680,296 586,286', class: 'landmark store-roof' }, facilities);
   addText(facilities, t('facility.store'), 637, 263, 'landmark-label');
   svgElement('circle', { cx: 583, cy: 342, r: 38, class: 'landmark landmark-dam' }, facilities);
@@ -275,8 +275,6 @@ export function buildMap(beds) {
   addMapDefinitions(map);
   svgElement('rect', { x: 0, y: 0, width: 1000, height: 660, class: 'site-ground' }, map);
   svgElement('path', { d: 'M116 48 L704 39 L891 118 L933 548 L775 616 L205 594 L94 500 Z', class: 'site-boundary' }, map);
-  svgElement('path', { d: 'M20 586 C148 540 236 533 335 548 C447 565 535 612 657 624 C774 635 874 604 976 551', class: 'site-road' }, map);
-  svgElement('path', { d: 'M23 586 C151 543 239 537 334 551 C446 568 534 615 656 627 C773 638 875 607 976 554', class: 'site-road-edge' }, map);
   svgElement('path', { d: 'M111 49 L704 40 L890 118 L932 547 L775 615 L205 593 L95 499 Z', class: 'site-boundary-line' }, map);
   addText(map, t('map.north'), 74, 78, 'north-label');
   svgElement('path', { d: 'M74 92 L74 53 M74 53 L67 65 M74 53 L81 65', class: 'north-arrow' }, map);
@@ -285,7 +283,6 @@ export function buildMap(beds) {
   addText(map, t('map.zoneWestUpper'), 145, 240, 'zone-label');
   addText(map, t('map.zoneWestLower'), 145, 350, 'zone-label');
   addText(map, t('map.zoneEast'), 847, 244, 'zone-label');
-  addText(map, t('map.roadSouth'), 160, 630, 'road-label');
   drawFacility(map);
   const lookup = new Map(beds.map((bed) => [bed.bed, bed]));
   bedLayout().forEach((position) => drawBed(map, position, lookup.get(position.bed)));
@@ -420,7 +417,7 @@ function tooltipHtml(bed, result) {
     `<span class="tooltip-reason">${escapeHtml(result.reason)}</span>`,
     '<dl>',
     `<div><dt>${escapeHtml(t('detail.dateIn'))}</dt><dd>${escapeHtml(loadDateText(bed))}</dd></div>`,
-    `<div><dt>${escapeHtml(t('detail.occupancy'))}</dt><dd>${escapeHtml(displayPercent(bed.occupancyPercent))}</dd></div>`,
+    `<div><dt>${escapeHtml(t('detail.inUse'))}</dt><dd>${escapeHtml(inUseText(bed.inUse))}</dd></div>`,
     `<div><dt>${escapeHtml(t('detail.elapsed'))}</dt><dd>${result.age === null ? '—' : escapeHtml(t('state.days', { count: result.age }))}<small>${escapeHtml(t('detail.notDryness'))}</small></dd></div>`,
     `<div><dt>${escapeHtml(t('detail.day14'))}</dt><dd>${day14 ? escapeHtml(displayDate(day14)) : '—'}</dd></div>`,
     `<div><dt>${escapeHtml(t('detail.moisture'))}</dt><dd>${escapeHtml(displayMoisture(bed.moisturePercent))}</dd></div>`,
@@ -501,7 +498,7 @@ export function selectBed(id, recordsByBed = appState.history) {
       `<p class="status-reason"><span aria-hidden="true">${escapeHtml(result.icon)}</span> ${escapeHtml(result.reason)}</p>` +
       '<dl class="detail-grid">' +
         `<div class="detail-item"><dt>${escapeHtml(t('detail.dateIn'))}</dt><dd>${escapeHtml(loadDateText(bed))}</dd></div>` +
-        `<div class="detail-item"><dt>${escapeHtml(t('detail.occupancy'))}</dt><dd>${escapeHtml(displayPercent(bed.occupancyPercent))}</dd></div>` +
+        `<div class="detail-item"><dt>${escapeHtml(t('detail.inUse'))}</dt><dd>${escapeHtml(inUseText(bed.inUse))}</dd></div>` +
         `<div class="detail-item"><dt>${escapeHtml(t('detail.elapsed'))}</dt><dd>${result.age === null ? '—' : escapeHtml(t('state.days', { count: result.age }))}<small>${escapeHtml(t('detail.notDrynessShort'))}</small></dd></div>` +
         `<div class="detail-item"><dt>${escapeHtml(t('detail.day14'))}</dt><dd>${day14 ? escapeHtml(displayDate(day14)) : '—'}</dd></div>` +
         `<div class="detail-item detail-wide"><dt>${escapeHtml(t('detail.moisture'))}</dt><dd>${escapeHtml(displayMoisture(bed.moisturePercent))}</dd></div>` +
@@ -563,15 +560,15 @@ function renderSummary(beds) {
     `<article class="state-count-card state-${state}"><span class="state-count-icon" aria-hidden="true">${icon}</span>` +
       `<div><span>${escapeHtml(label)}</span><strong>${value}</strong><small>${escapeHtml(note)}</small></div></article>`
   ).join('');
-  const occupancyKnown = beds.every((bed) => bed.occupancyPercent !== null && Number.isFinite(bed.occupancyPercent));
-  const occupancy = occupancyKnown ? beds.reduce((sum, bed) => sum + bed.occupancyPercent, 0) / beds.length : null;
-  document.getElementById('occupancy-label').textContent = t('summary.occupancy', { count: BED_COUNT });
-  document.getElementById('occupancy-value').textContent = occupancy === null ? t('value.unknown') : occupancy.toFixed(1);
-  document.getElementById('occupancy-unit').textContent = occupancy === null ? '' : '%';
-  document.getElementById('occupancy-note').textContent = occupancy === null
-    ? t('summary.occupancyUnknown', { count: BED_COUNT })
-    : t('summary.occupancyKnown', { count: BED_COUNT, threshold: OCCUPANCY_ALERT });
-  document.getElementById('occupancy-alert').hidden = occupancy === null || occupancy < OCCUPANCY_ALERT;
+  const inUseKnown = beds.every((bed) => bed.inUse !== null);
+  const inUseCount = inUseKnown ? beds.filter((bed) => bed.inUse).length : null;
+  document.getElementById('occupancy-label').textContent = t('summary.inUse');
+  document.getElementById('occupancy-value').textContent = inUseCount === null ? t('value.unknown') : inUseCount;
+  document.getElementById('occupancy-unit').textContent = inUseCount === null ? '' : `/ ${BED_COUNT}`;
+  document.getElementById('occupancy-note').textContent = inUseCount === null
+    ? t('summary.inUseUnknown')
+    : t('summary.inUseKnown', { count: BED_COUNT, threshold: OCCUPANCY_ALERT });
+  document.getElementById('occupancy-alert').hidden = inUseCount === null || (inUseCount / BED_COUNT) * 100 < OCCUPANCY_ALERT;
 }
 
 function applyConfigCopy() {
@@ -677,7 +674,7 @@ function rerenderLanguage() {
 
 function fallbackSnapshotBeds() {
   return Array.from({ length: BED_COUNT }, (_, index) => ({
-    bed: index + 1, loadDate: null, loadDateRaw: '', occupancyPercent: null,
+    bed: index + 1, loadDate: null, loadDateRaw: '', inUse: null,
     moisturePercent: null, source: 'snapshot'
   }));
 }

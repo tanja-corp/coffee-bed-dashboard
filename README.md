@@ -15,7 +15,7 @@ GitHub Pages project for monitoring Shah's coffee drying beds.
 - The language switcher in the top bar changes the UI between English (default), Kiswahili, and Japanese. A valid `?lang=en`, `?lang=sw`, or `?lang=ja` URL parameter overrides the saved browser preference. Edit interface translations in `site/i18n.js`.
 - `site/index.html` renders the Shah dashboard and an approximate facility diagram based on the five user-provided aerial/reference photos. It marks the drying areas and Factory, Store, Dam, and Skin dryer. The diagram is illustrative, not a surveyed floor plan; actual bed-number-to-position mapping has not been confirmed. The reference photos themselves are not published.
 - Selecting a bed shows matching historical rows when its number occurs in the CSV `table_numbers` field. This is a possible history lookup, not confirmation that the bed is currently occupied.
-- The CSV's occupancy percentage is blank, and no current per-bed load dates are provided. The dashboard therefore reports current occupancy and bed state as unknown. It does not treat `no_of_debes` as a percentage.
+- The snapshot CSV has no per-bed load dates or use status, so current bed state is shown as unknown. The "Beds in use" card counts, out of all 80 beds, those with an open lot on the live sheet. `no_of_debes` is never treated as a percentage.
 - Age color guide: 0–7 days yellow-green, 8–10 days orange, and 11+ days red. The drying period remains fixed at 14 days. These colors are never assigned to historical rows in the snapshot.
 - Shah's 80 total beds and Nylex condition counts (15 good, 65 worn) are shown as provided. The individual beds corresponding to those condition counts are not identified.
 
@@ -65,16 +65,16 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 - `DRYING_DAYS`: 固定乾燥期間（現在14日）
 - `AGE_GREEN_MAX` / `AGE_ORANGE_MAX`: 色の経過日数境界
 - `MOISTURE_TARGET`: 実測水分の目安値（推定には使いません）
-- `OCCUPANCY_ALERT`: 全80床の平均占有率警告
+- `OCCUPANCY_ALERT`: 使用中ベッドの割合の警告（80床のうち何%以上で出すか）
 
 ### ライブ連携（Shahシートを直接読む）
 
 ネイティブ版の「Traceability Record Sheet_2026crop」のShahタブを読みます。`site/config.js` の `CURRENT_STATUS_URL` にそのタブのCSV URLを入れると有効になります（`null` の間は、これまでどおり公開スナップショットを表示）。
 
-- 読むのは Tables ブロックの `Date In`、`Table Nos`、`Occupancy %`、`Date Out`（列は見出しで探すので、列を足しても動きます）。
+- 読むのは Tables ブロックの `Date In`、`Table Nos`、`Date Out`（列は見出しで探すので、列を足しても動きます）。`Occupancy %` 列は使いません。
 - `Table Nos` があり `Date Out` が空の行を「そのテーブルに乗っている」と判断します。`Date In` は各ロットの先頭行にだけあるため、下の行へ引き継ぎます。
-- 同じテーブルに複数行ある場合は、一番古い `Date In` で色を決め、`Occupancy %` は各行の合計（上限100）にします。1行に複数のテーブル番号があるときは、その行の `Occupancy %` を各テーブルに同じ値で当てます。
-- `Occupancy %` が空の行があるテーブルは占有率「不明」です。全テーブルが埋まるまで、80台の平均占有率は「不明」と表示されます。
+- 同じテーブルに複数行ある場合は、一番古い `Date In` で色を決めます。1行に複数のテーブル番号があるときは、その全テーブルを使用中として数えます。
+- 画面の「使用中ベッド」は、全80床のうちロットが乗っているテーブルの数です（例: 52 / 80）。ライブシートを読めない間は「不明」です。使用中が `OCCUPANCY_ALERT`（%）以上になると警告を出します。
 - 乗っている行が1つもないテーブルは「空き」です。引き払ったら `Date Out` を入れてください。入れ忘れると、そのテーブルは使用中のまま日数が増え、赤になります。
 - 日付は `dd/mm/yyyy`（シートの表示形式）で読みます。年の誤入力（例: 2926）は「日付不正」と表示します。
 - `Table Nos` が `4-15` のような範囲表記の未完了行、または81番以上のテーブルは、マップに載せられないため画面に注意書きが出ます。

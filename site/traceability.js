@@ -37,12 +37,6 @@ export function parseSheetDate(raw, dateOrder = 'dmy') {
   return dateOrder === 'mdy' ? isoFrom(year, first, second) : isoFrom(year, second, first);
 }
 
-function parseNumber(value) {
-  if (value === null || value === undefined || String(value).trim() === '') return null;
-  const number = Number(String(value).replace('%', '').trim());
-  return Number.isFinite(number) ? number : null;
-}
-
 function tableNumbers(value) {
   if (!/^\d+(?:\s*[,;&]\s*\d+)*$/.test(value)) return null;
   return value.split(/[,;&]/).map((part) => Number(part.trim()));
@@ -61,7 +55,7 @@ function locateColumns(rows) {
     };
     const columns = {
       dateIn: within('Date In'), tableNos: within('Table Nos'), debes: within('No of Debes'),
-      occupancy: within('Occupancy %'), dateOut: within('Date Out'), moisture: within('Moisture %'),
+      dateOut: within('Date Out'), moisture: within('Moisture %'),
       storageLot: labels.findIndex((cell, index) => index >= end && cell === 'Storage Lot')
     };
     if (columns.dateIn < 0 || columns.tableNos < 0) return null;
@@ -101,7 +95,7 @@ export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy' } = {
 
     const tables = tableNumbers(tablesText);
     if (!tables) { unparsedOpenRows += 1; continue; }
-    const entry = { dateRaw: carriedDate, iso: isoIn, occupancy: parseNumber(cell(row, columns.occupancy)) };
+    const entry = { dateRaw: carriedDate, iso: isoIn };
     tables.forEach((table) => {
       if (table < 1 || table > bedCount) { outOfRange.add(table); return; }
       if (!open.has(table)) open.set(table, []);
@@ -121,16 +115,14 @@ export function parseTraceability(text, { bedCount = 80, dateOrder = 'dmy' } = {
   const beds = Array.from({ length: bedCount }, (_, offset) => {
     const bed = offset + 1;
     const entries = open.get(bed);
-    if (!entries) return { bed, loadDate: null, loadDateRaw: '', occupancyPercent: 0, moisturePercent: null, source: 'live' };
+    if (!entries) return { bed, loadDate: null, loadDateRaw: '', inUse: false, moisturePercent: null, source: 'live' };
     const badDate = entries.find((entry) => !entry.iso);
     const dates = entries.map((entry) => entry.iso).filter(Boolean).sort();
-    const occupancies = entries.map((entry) => entry.occupancy);
-    const known = occupancies.every((value) => value !== null);
     return {
       bed,
       loadDate: badDate ? null : dates[0],
       loadDateRaw: badDate ? (badDate.dateRaw || '—') : dates[0],
-      occupancyPercent: known ? Math.min(100, occupancies.reduce((sum, value) => sum + value, 0)) : null,
+      inUse: true,
       moisturePercent: null,
       source: 'live'
     };
