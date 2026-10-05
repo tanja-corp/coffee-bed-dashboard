@@ -249,11 +249,11 @@ export function bedLayout() {
 
 function drawFacility(map) {
   const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
-  svgElement('polygon', { points: '720,57 783,69 774,128 708,113', class: 'landmark skin-roof' }, facilities);
-  svgElement('polygon', { points: '720,57 751,63 743,120 708,113', class: 'skin-roof-blue' }, facilities);
-  addText(facilities, t('facility.skinDryer'), 744, 48, 'landmark-label-outside');
-  svgElement('polygon', { points: '595,174 689,183 680,242 586,232', class: 'landmark store-roof' }, facilities);
-  addText(facilities, t('facility.store'), 637, 209, 'landmark-label');
+  svgElement('polygon', { points: '786,57 849,69 840,128 774,113', class: 'landmark skin-roof' }, facilities);
+  svgElement('polygon', { points: '786,57 817,63 809,120 774,113', class: 'skin-roof-blue' }, facilities);
+  addText(facilities, t('facility.skinDryer'), 810, 48, 'landmark-label-outside');
+  svgElement('polygon', { points: '595,228 689,237 680,296 586,286', class: 'landmark store-roof' }, facilities);
+  addText(facilities, t('facility.store'), 637, 263, 'landmark-label');
   svgElement('circle', { cx: 583, cy: 342, r: 38, class: 'landmark landmark-dam' }, facilities);
   svgElement('circle', { cx: 583, cy: 342, r: 30, class: 'dam-waterline' }, facilities);
   addText(facilities, t('facility.dam'), 583, 342, 'landmark-label');
@@ -261,7 +261,8 @@ function drawFacility(map) {
   svgElement('line', { x1: 630, y1: 420, x2: 743, y2: 428, class: 'roof-ridge' }, facilities);
   addText(facilities, t('facility.factory'), 681, 456, 'landmark-label');
   svgElement('polygon', { points: '772,235 823,238 817,542 765,535', class: 'long-roof' }, facilities);
-  addText(facilities, t('map.longRoof'), 796, 391, 'long-roof-label', { transform: 'rotate(90 796 391)' });
+  addText(facilities, t('map.washingArea'), 795, 312, 'long-roof-label', { transform: 'rotate(90 795 312)' });
+  addText(facilities, t('map.fermentation'), 793, 466, 'long-roof-label', { transform: 'rotate(90 793 466)' });
   svgElement('polygon', { points: '526,397 576,399 574,444 523,441', class: 'landmark small-roof' }, facilities);
   svgElement('polygon', { points: '548,462 603,466 599,507 544,503', class: 'landmark small-roof' }, facilities);
   svgElement('polygon', { points: '511,470 542,472 540,510 508,507', class: 'landmark small-roof' }, facilities);
