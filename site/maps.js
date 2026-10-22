@@ -178,10 +178,10 @@ function drawBergfrieden(map, t) {
 
 function tingatingaLayout() {
   const upper = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    .map((index) => row(index + 1, 543.5, 381.5 + index * 27.3, 196, 18, 0));
-  const leftTop = [666, 688, 710].map((cy, index) => row(11 + index, 261, cy, 236, 16, 0));
+    .map((index) => row(index + 1, 543.5, 388.5 + index * 25.5, 196, 18, 0));
+  const leftTop = [671, 693, 715].map((cy, index) => row(11 + index, 261, cy, 236, 16, 0));
   const left = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-    .map((index) => row(14 + index, 261, 750.5 + index * 31, 236, 20, 0));
+    .map((index) => row(14 + index, 261, 737 + index * 30.8, 236, 20, 0));
   const right = [38, 37, 36, 35, 34, 33, 32, 30, 29, 28]
     .map((bed, index) => row(bed, 631, 866 + index * 29.1, 296, 20, 0));
   const central = [
