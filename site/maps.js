@@ -104,79 +104,12 @@ function drawShah(map, t) {
   addText(facilities, t('map.smallBuildings'), 548, 528, 'minor-label');
 }
 
-/* ---------- Bergfrieden (45 beds, traced from one satellite image, 966 x 886 px) ---------- */
-// Beds in the lower complex run about 6° clockwise; the upper enclosure about 3°.
-// Beds 42, 44 and 45 sit under tree canopy in the photo: their rows are inferred from the row spacing.
-
-function bergfriedenLayout() {
-  const upper = [260.5, 280, 293.5, 313, 328, 346.5, 361, 380, 397, 417]
-    .map((cy) => (bed) => row(bed, 551, cy, 56, 10, 3));
-  const west = [
-    [381, 530.3, 171], [374.5, 566.6, 171], [370.5, 603.2, 171], [368.5, 624.4, 171],
-    [343.5, 638.3, 135], [341.5, 659.6, 135], [340.5, 673.5, 133], [348, 695.8, 152],
-    [343.5, 712.3, 155], [343.5, 729.3, 157], [341, 746.6, 156]
-  ].map(([cx, cy, length]) => (bed) => row(bed, cx, cy, length, 10.5, 6));
-  const central = [
-    [516, 525, 53], [512, 551, 54], [507.5, 574, 57], [548, 599, 142], [485.5, 606.5, 23],
-    [519.5, 610.5, 37], [583, 619, 72], [487, 627, 34], [531.5, 631.7, 47],
-    [696, 576.6, 148], [695.5, 619, 143], [642.5, 627, 35], [681, 631.6, 30], [667.5, 649.5, 77], [738.5, 658.3, 57]
-  ].map(([cx, cy, length]) => (bed) => row(bed, cx, cy, length, 9, 6));
-  const south = [
-    [616, 714.7, 297], [590, 728, 271], [591.5, 748.6, 276], [597.5, 765.2, 285], [592.5, 785.2, 245],
-    [597.5, 802, 255, true], [600, 819.4, 260], [602, 836.5, 258, true], [604, 853.5, 252, true]
-  ].map(([cx, cy, length, inferred]) => (bed) => row(bed, cx, cy, length, 10, 6, inferred ? { inferred: true } : {}));
-  return numbered([...upper, ...west, ...central, ...south]);
-}
-
-function drawBergfrieden(map, t) {
-  svgElement('rect', { x: 0, y: 0, width: 966, height: 886, class: 'site-ground' }, map);
-  polygon(map, '225,46 236,28 540,4 806,4 870,330 912,600 936,886 225,886', 'site-boundary');
-  svgElement('polyline', { points: '225,46 236,28 540,4 806,4 870,330 912,600 936,886', class: 'site-boundary-line' }, map);
-
-  const ground = svgElement('g', { class: 'ground-features' }, map);
-  polygon(ground, '397,182 662,190 652,486 400,502', 'yard');
-  polygon(ground, '262,503 793,558 783,880 250,812', 'parcel');
-  svgElement('path', { d: 'M448 505 L436 880', class: 'track' }, ground);
-  svgElement('path', { d: 'M225 120 C262 128 292 190 286 262 C281 328 262 360 268 420 C272 470 252 500 225 512 Z', class: 'canopy' }, ground);
-  svgElement('path', { d: 'M660 370 C700 335 790 345 812 392 C832 438 812 498 760 506 C706 514 650 470 652 420 Z', class: 'canopy' }, ground);
-  svgElement('path', { d: 'M225 812 C300 800 400 790 470 808 C520 820 560 846 590 886 L225 886 Z', class: 'canopy' }, ground);
-  svgElement('path', { d: 'M700 830 C760 800 830 806 900 830 L912 886 L690 886 Z', class: 'canopy' }, ground);
-  polygon(ground, '642,58 902,64 906,268 646,262', 'hedge');
-
-  const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
-  polygon(facilities, '305,63 330,63 330,180 305,180', 'landmark roof-light');
-  polygon(facilities, '330,22 393,24 392,181 329,179', 'landmark factory-roof');
-  svgElement('line', { x1: 361, y1: 26, x2: 361, y2: 177, class: 'roof-ridge' }, facilities);
-  polygon(facilities, '384,152 446,154 445,180 383,179', 'landmark small-roof');
-  polygon(facilities, '481,100 656,107 653,176 479,170', 'landmark factory-roof');
-  addText(facilities, t('facility.factory'), 361, 166, 'landmark-label');
-  polygon(facilities, '403,195 478,190 482,498 400,500', 'landmark store-roof');
-  svgElement('line', { x1: 441, y1: 196, x2: 441, y2: 496, class: 'roof-ridge' }, facilities);
-  addText(facilities, t('facility.store'), 441, 345, 'landmark-label', { transform: 'rotate(-90 441 345)' });
-  polygon(facilities, '545,528 592,529 591,590 544,589', 'landmark small-roof');
-  addText(facilities, t('facility.office'), 568, 514, 'landmark-label-outside');
-  polygon(facilities, '296,362 395,362 395,408 296,408', 'landmark roof-light');
-  polygon(facilities, '320,292 380,292 380,340 320,340', 'landmark roof-light');
-  polygon(facilities, '348,215 392,215 392,284 348,284', 'landmark roof-light');
-  addText(facilities, t('map.houses'), 345, 428, 'minor-label');
-  polygon(facilities, '718,114 800,112 803,233 720,235', 'landmark roof-warm');
-  polygon(facilities, '735,255 785,255 785,342 735,342', 'landmark small-roof');
-  polygon(facilities, '782,560 800,562 800,760 782,758', 'landmark small-roof');
-  svgElement('rect', { x: 506, y: 246, width: 92, height: 186, rx: 3, class: 'enclosure', transform: 'rotate(3 552 339)' }, facilities);
-
-  northArrow(map, t, 262, 205);
-  addText(map, t('map.zoneUpperBeds'), 506, 236, 'zone-label');
-  addText(map, t('map.zoneWestRows'), 268, 496, 'zone-label');
-  addText(map, t('map.zoneCentral'), 468, 508, 'zone-label');
-  addText(map, t('map.zoneSouthRows'), 300, 790, 'zone-label');
-}
-
-/* ---------- Tingatinga (45 beds, drawn from a hand sketch of the site, 900 x 1600 px scan) ---------- */
+/* ---------- Bergfrieden (45 beds, drawn from a hand sketch of the site, 900 x 1600 px scan) ---------- */
 // The sketch was supplied mirrored left to right; the map keeps that mirrored layout with the numbers read the right way round.
 // Bed 40 has no outline in the sketch (only its number), so its row is placed between beds 41 and 39.
 // The short bed beside the power house is labelled ambiguously; it is read as 31, the only number missing from the right block.
 
-function tingatingaLayout() {
+function bergfriedenLayout() {
   const upper = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     .map((index) => row(index + 1, 543.5, 388.5 + index * 25.5, 196, 18, 0));
   const leftTop = [671, 693, 715].map((cy, index) => row(11 + index, 261, cy, 236, 16, 0));
@@ -192,7 +125,7 @@ function tingatingaLayout() {
   return [...upper, ...leftTop, ...left, ...right, ...central].sort((a, b) => a.bed - b.bed);
 }
 
-function drawTingatinga(map, t) {
+function drawBergfrieden(map, t) {
   svgElement('rect', { x: 0, y: 240, width: 860, height: 1000, class: 'site-ground' }, map);
   polygon(map, '30,268 830,268 830,1210 74,1210', 'site-boundary');
   polygon(map, '30,268 830,268 830,1210 74,1210', 'site-boundary-line');
@@ -230,8 +163,48 @@ function drawTingatinga(map, t) {
   addText(map, t('map.zoneCentral'), 482, 662, 'zone-label');
 }
 
+/* ---------- Tingatinga (25 beds, traced from one satellite image, 514 x 642 px) ---------- */
+// 19 beds are visible in the photo (9 north, 10 south, running about 4° off north).
+// The remaining 6 sit in a tray outside the east hedge until their positions are known.
+
+function tingatingaLayout() {
+  const north = [117, 134.5, 152, 169.5, 187, 204.5, 222, 239.5, 257]
+    .map((cx) => (bed) => column(bed, cx, 148, 220, 13, -4));
+  const south = [127, 146, 165, 184, 203, 222, 241, 260, 279, 298]
+    .map((cx) => (bed) => column(bed, cx, 425, 230, 14, -3.5));
+  const tray = [0, 1, 2, 3, 4, 5]
+    .map((index) => (bed) => column(bed, 518 + (index % 3) * 28, 368 + Math.floor(index / 3) * 70, 50, 18, 0, { unlocated: true }));
+  return numbered([...north, ...south, ...tray]);
+}
+
+function drawTingatinga(map, t) {
+  svgElement('rect', { x: 0, y: -20, width: 640, height: 680, class: 'site-ground' }, map);
+  polygon(map, '88,22 420,12 447,250 468,612 102,616 92,300', 'clearing');
+  const ground = svgElement('g', { class: 'ground-features' }, map);
+  svgElement('path', { d: 'M60 -20 L92 -20 C84 120 98 300 88 420 C82 520 96 590 92 640 L60 640 Z', class: 'canopy' }, ground);
+  svgElement('path', { d: 'M100 640 C140 600 230 592 300 606 C340 614 370 628 380 640 Z', class: 'canopy' }, ground);
+  svgElement('polyline', { points: '420,-20 447,250 470,640', class: 'hedge-line' }, ground);
+  svgElement('rect', { x: 100, y: 28, width: 168, height: 238, rx: 3, class: 'slab', transform: 'rotate(-4 184 147)' }, ground);
+  svgElement('rect', { x: 114, y: 302, width: 198, height: 248, rx: 3, class: 'slab', transform: 'rotate(-3.5 213 426)' }, ground);
+  polygon(ground, '330,286 382,288 384,372 331,370', 'gravel');
+
+  const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
+  polygon(facilities, '318,76 404,62 432,236 345,250', 'landmark store-roof');
+  svgElement('line', { x1: 361, y1: 69, x2: 388, y2: 243, class: 'roof-ridge' }, facilities);
+  addText(facilities, t('facility.store'), 375, 156, 'landmark-label', { transform: 'rotate(-81 375 156)' });
+  polygon(facilities, '212,262 252,262 252,294 212,294', 'landmark roof-light');
+  polygon(facilities, '400,578 440,578 440,606 400,606', 'landmark small-roof');
+
+  northArrow(map, t, 466, 52);
+  addText(map, t('map.zoneNorthBlock'), 100, 16, 'zone-label');
+  addText(map, t('map.zoneSouthBlock'), 114, 292, 'zone-label');
+
+  svgElement('rect', { x: 488, y: 286, width: 116, height: 200, rx: 6, class: 'tray' }, map);
+  twoLines(t('map.unlocated')).forEach((line, index) => addText(map, line, 546, 306 + index * 14, 'tray-label', { 'text-anchor': 'middle' }));
+}
+
 export const SITE_MAPS = {
   shah: { viewBox: [55, 30, 900, 605], layout: shahLayout, draw: drawShah },
-  bergfrieden: { viewBox: [244, 156, 562, 718], layout: bergfriedenLayout, draw: drawBergfrieden },
-  tingatinga: { viewBox: [20, 290, 822, 932], layout: tingatingaLayout, draw: drawTingatinga }
+  bergfrieden: { viewBox: [20, 290, 822, 932], layout: bergfriedenLayout, draw: drawBergfrieden },
+  tingatinga: { viewBox: [62, -8, 552, 630], layout: tingatingaLayout, draw: drawTingatinga }
 };

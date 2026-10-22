@@ -262,7 +262,7 @@ function drawBed(map, position, bed) {
   const centerX = position.x + position.width / 2;
   const centerY = position.y + position.height / 2;
   const transform = position.rotation ? `rotate(${position.rotation} ${centerX} ${centerY})` : '';
-  const extraClass = (position.inferred ? ' bed-inferred' : '');
+  const extraClass = (position.inferred ? ' bed-inferred' : '') + (position.unlocated ? ' bed-unlocated' : '');
   const group = svgElement('g', {
     class: `bed-marker state-${result.state}${result.confirm ? ' state-confirm' : ''}${extraClass}`,
     transform, tabindex: 0, role: 'button', 'aria-label': ariaLabelForBed(bed, result), 'data-bed-group': bed.bed
@@ -744,7 +744,7 @@ function applySiteCopy() {
   document.getElementById('footer-site').textContent = t('footer.snapshot', { site: name });
   const noteKey = `map.note.${site.id}`;
   document.getElementById('map-site-note').textContent = t(noteKey, { count: site.bedCount });
-  document.getElementById('legend-inferred').hidden = site.id !== 'bergfrieden';
+  document.getElementById('legend-unlocated').hidden = site.id !== 'tingatinga';
 }
 
 function currentData() {
