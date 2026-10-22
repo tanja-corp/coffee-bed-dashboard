@@ -28,10 +28,10 @@ export const SITES = [
     nylex: null, mobileZoom: 1.6
   },
   {
-    id: 'tingatinga', tab: 'TTC', bedCount: 25,
+    id: 'tingatinga', tab: 'TTC', bedCount: 45,
     statusUrl: csvUrl('544732964'), sheetUrl: sheetUrl('544732964'),
     snapshotCsvUrl: null, sourceInfoUrl: null,
-    nylex: null, mobileZoom: 1.2
+    nylex: null, mobileZoom: 1.6
   }
 ];
 export const DEFAULT_SITE = 'shah';
