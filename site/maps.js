@@ -72,20 +72,20 @@ function shahLayout() {
     layout.push(position);
   }
   for (let col = 0; col < 18; col += 1) {
-    layout.push({ bed: 42 - col, x: westX(col), y: 605, width: 16, height: 88, rotation: 0 });
+    layout.push({ bed: 42 - col, x: westX(col), y: 605, width: 16, height: 125, rotation: 0 });
   }
   // Both north runs point upward: 43 and 54 are at the bottom, 53 and 64 at the top.
   for (let index = 0; index < 11; index += 1) {
     const y = 385 - index * 25;
-    layout.push({ bed: 43 + index, x: 475, y, width: 300, height: 20, rotation: 0 });
-    layout.push({ bed: 54 + index, x: 155, y, width: 300, height: 20, rotation: 0 });
+    layout.push({ bed: 43 + index, x: 475, y, width: 300, height: 16, rotation: 0 });
+    layout.push({ bed: 54 + index, x: 155, y, width: 300, height: 16, rotation: 0 });
   }
   layout.push(column(65, 124, 252, 250, 14, 0));
   layout.push(column(null, 143, 252, 250, 14, 0));
   layout.push(column(66, 815, 250, 240, 15, 0));
   layout.push(column(69, 850, 250, 240, 15, 0));
   layout.push(column(67, 885, 250, 240, 15, 0));
-  layout.push(row(71, 625, 105, 300, 20, 0));
+  layout.push(row(71, 625, 105, 300, 16, 0));
   layout.push(row(72, 881, 445, 72, 14, 0));
   // East: two horizontal lines of six long vertical beds, then a second 75 below.
   [73, 79].forEach((first, group) => {
