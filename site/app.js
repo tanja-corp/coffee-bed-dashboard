@@ -231,7 +231,10 @@ function addMapDefinitions(map) {
 
 export function bedLayout(site = appState.site) {
   const layout = SITE_MAPS[site.id].layout();
-  if (layout.length !== site.bedCount) throw new Error(`Map layout has ${layout.length} beds, expected ${site.bedCount}`);
+  const numberedBeds = new Set(layout.map((position) => position.bed).filter(Number.isInteger));
+  if (numberedBeds.size !== site.bedCount) {
+    throw new Error(`Map layout has ${numberedBeds.size} numbered beds, expected ${site.bedCount}`);
+  }
   return layout;
 }
 
@@ -252,7 +255,10 @@ export function buildMap(beds) {
   definition.draw(map, t);
   const lookup = new Map(beds.map((bed) => [bed.bed, bed]));
   const bedLayer = svgElement('g', { class: 'bed-layer' }, map);
-  bedLayout().forEach((position) => drawBed(bedLayer, position, lookup.get(position.bed)));
+  bedLayout().forEach((position) => {
+    if (position.bed === null) drawUnnumberedBed(bedLayer, position);
+    else drawBed(bedLayer, position, lookup.get(position.bed));
+  });
   renderBedGrid(beds);
   if (appState.selectedBed) markSelected(appState.selectedBed);
 }
@@ -267,10 +273,10 @@ function drawBed(map, position, bed) {
     class: `bed-marker state-${result.state}${result.confirm ? ' state-confirm' : ''}${extraClass}`,
     transform, tabindex: 0, role: 'button', 'aria-label': ariaLabelForBed(bed, result), 'data-bed-group': bed.bed
   }, map);
-  svgElement('rect', {
-    x: position.x, y: position.y, width: position.width, height: position.height, rx: 2,
+  (position.segments || [position]).forEach((segment) => svgElement('rect', {
+    x: segment.x, y: segment.y, width: segment.width, height: segment.height, rx: 2,
     class: `bed-cell state-${result.state}${result.confirm ? ' state-confirm' : ''}`, 'data-bed': bed.bed
-  }, group);
+  }, group));
   // A bed under tree canopy in the photo keeps its colour under a translucent canopy tint.
   if (position.inferred) {
     svgElement('rect', { x: position.x, y: position.y, width: position.width, height: position.height, rx: 2, class: 'bed-canopy-tint' }, group);
@@ -279,14 +285,15 @@ function drawBed(map, position, bed) {
   // State letters only where the bed is big enough to hold them; colour carries the state elsewhere.
   const long = Math.max(position.width, position.height) >= 60 && Math.min(position.width, position.height) >= 12;
   const narrow = !horizontal && position.width < 16;
-  const labelY = horizontal ? centerY : centerY + (long ? 5 : 0);
+  const labelX = position.labelX ?? centerX;
+  const labelY = position.labelY ?? (horizontal ? centerY : centerY + (long ? 5 : 0));
   const fontSize = Math.min(9, Math.max(7, Math.min(position.width, position.height) * 0.85));
   const pillWidth = String(bed.bed).length * fontSize * 0.6 + 3;
   svgElement('rect', {
-    x: centerX - pillWidth / 2, y: labelY - fontSize / 2 - 0.5, width: pillWidth, height: fontSize + 1, rx: 1.5,
+    x: labelX - pillWidth / 2, y: labelY - fontSize / 2 - 0.5, width: pillWidth, height: fontSize + 1, rx: 1.5,
     class: `bed-label-bg state-${result.state}`
   }, group);
-  addText(group, String(bed.bed), centerX, labelY + 0.5, 'bed-number', { style: `font-size:${fontSize}px` });
+  addText(group, String(bed.bed), labelX, labelY + 0.5, 'bed-number', { style: `font-size:${fontSize}px` });
   if (long) {
     addText(group, result.confirm ? '!' : result.icon,
       horizontal ? position.x + position.width - 8 : centerX,
@@ -313,6 +320,14 @@ function drawBed(map, position, bed) {
       if (isMobileLayout()) openBedSheet(bed, result);
     }
   });
+}
+
+function drawUnnumberedBed(map, position) {
+  const group = svgElement('g', { class: 'bed-marker bed-unnumbered', 'aria-label': t('map.unnumbered') }, map);
+  svgElement('rect', {
+    x: position.x, y: position.y, width: position.width, height: position.height, rx: 2,
+    class: 'bed-cell'
+  }, group);
 }
 
 function isMobileLayout() {
@@ -460,8 +475,7 @@ function hideTooltip() {
 function markSelected(id) {
   const map = document.getElementById('yard-map');
   map.querySelectorAll('.bed-cell.selected').forEach((cell) => cell.classList.remove('selected'));
-  const cell = map.querySelector(`[data-bed="${id}"]`);
-  if (cell) cell.classList.add('selected');
+  map.querySelectorAll(`[data-bed="${id}"]`).forEach((cell) => cell.classList.add('selected'));
 }
 
 export function selectBed(id, recordsByBed = appState.history) {
@@ -709,9 +723,13 @@ function renderSummary(beds) {
   const oldest = inUse.slice().sort((left, right) => left.loadDate.localeCompare(right.loadDate))[0];
   const oldestAge = oldest ? elapsedDays(oldest.loadDate) : null;
   const due = pastPlannedOut(beds);
+  const nylexCount = site.nylex ? site.nylex.good + site.nylex.worn : 0;
+  const nylexNote = !site.nylex ? t('summary.nylexNone')
+    : nylexCount === site.bedCount ? t('summary.nylex', site.nylex)
+      : t('summary.nylexPartial', { ...site.nylex, count: nylexCount });
   const cards = [
     ['capacity', t('summary.capacity'), site.bedCount, t('summary.beds'),
-      site.nylex ? t('summary.nylex', site.nylex) : t('summary.nylexNone')],
+      nylexNote],
     ['average', t('summary.avgDays'), known && average !== null ? average : '—', known && average !== null ? t('summary.days') : '',
       known ? t('summary.avgNote', { count: ages.length }) : t('summary.needsLive')],
     ['oldest', t('summary.oldest'), known && oldestAge !== null ? oldestAge : '—', known && oldestAge !== null ? t('summary.days') : '',
@@ -744,7 +762,8 @@ function applySiteCopy() {
   document.getElementById('footer-site').textContent = t('footer.snapshot', { site: name });
   const noteKey = `map.note.${site.id}`;
   document.getElementById('map-site-note').textContent = t(noteKey, { count: site.bedCount });
-  document.getElementById('legend-unlocated').hidden = site.id !== 'tingatinga';
+  document.getElementById('map-number-note').hidden = site.id === 'shah';
+  document.getElementById('legend-unlocated').hidden = !['shah', 'tingatinga'].includes(site.id);
 }
 
 function currentData() {

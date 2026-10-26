@@ -52,24 +52,50 @@ function twoLines(text) {
   return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
 }
 
-/* ---------- Shah (80 beds, drawn from five aerial/reference photos) ---------- */
+/* ---------- Shah (field numbering transcribed from the annotated site print) ---------- */
 
 function shahLayout() {
   const layout = [];
-  let bed = 1;
-  for (let line = 0; line < 6; line += 1) {
-    for (let col = 0; col < 3; col += 1) {
-      layout.push({ bed: bed++, x: 150 + col * 125, y: 78 + line * 24, width: 105, height: 14, rotation: 0 });
+  // The two central-west runs are read right-to-left on the field print.
+  for (let col = 0; col < 21; col += 1) {
+    const bed = 21 - col;
+    const position = { bed, x: 145 + col * 18.5, y: 250, width: 14, height: 84, rotation: 0 };
+    if (bed === 7 || bed === 8) {
+      position.segments = [
+        { x: position.x, y: 250, width: 14, height: 37 },
+        { x: position.x, y: 297, width: 14, height: 37 }
+      ];
+      position.labelY = 315;
     }
+    layout.push(position);
   }
-  for (let line = 0; line < 5; line += 1) {
-    for (let col = 0; col < 2; col += 1) {
-      layout.push({ bed: bed++, x: 590 + col * 98, y: 83 + line * 25, width: 82, height: 13, rotation: -35 });
+  for (let col = 0; col < 21; col += 1) {
+    layout.push({ bed: 42 - col, x: 145 + col * 18.5, y: 360, width: 14, height: 104, rotation: 0 });
+  }
+  // Both north runs point upward: 43 and 54 are at the bottom, 53 and 64 at the top.
+  for (let index = 0; index < 11; index += 1) {
+    const y = 218 - index * 10;
+    layout.push({ bed: 43 + index, x: 285, y, width: 220, height: 8, rotation: 0 });
+    layout.push({ bed: 54 + index, x: 167, y, width: 100, height: 8, rotation: 0 });
+  }
+  layout.push(column(65, 124, 146, 132, 14, 0));
+  layout.push(column(null, 143, 146, 132, 14, 0));
+  layout.push(column(66, 574, 150, 116, 15, 0));
+  layout.push(column(69, 621, 138, 90, 15, 0));
+  layout.push(column(67, 686, 150, 116, 15, 0));
+  layout.push(column(70, 749, 143, 90, 15, 0));
+  layout.push(row(71, 330, 80, 105, 14, 0));
+  layout.push(row(72, 881, 258, 72, 14, 0));
+  // East is two groups of six, followed by a second physical bed marked 75.
+  [73, 79].forEach((first, group) => {
+    for (let line = 0; line < 3; line += 1) {
+      for (let col = 0; col < 2; col += 1) {
+        layout.push({ bed: first + line * 2 + col, x: 845 + col * 38, y: 288 + group * 112 + line * 25, width: 34, height: 15, rotation: 0 });
+      }
     }
-  }
-  for (let col = 0; col < 21; col += 1) layout.push({ bed: bed++, x: 145 + col * 18.5, y: 250, width: 14, height: 84, rotation: 0 });
-  for (let col = 0; col < 21; col += 1) layout.push({ bed: bed++, x: 145 + col * 18.5, y: 360, width: 14, height: 104, rotation: 0 });
-  for (let line = 0; line < 10; line += 1) layout.push({ bed: bed++, x: 845, y: 255 + line * 28, width: 72, height: 15, rotation: 0 });
+  });
+  layout.push({ bed: 75, x: 845, y: 496, width: 72, height: 15, rotation: 0 });
+  layout.push({ bed: 68, x: 809, y: 580, width: 72, height: 14, rotation: 0, unlocated: true });
   return layout;
 }
 
@@ -78,12 +104,14 @@ function drawShah(map, t) {
   svgElement('path', { d: 'M116 48 L704 39 L891 118 L933 548 L775 616 L205 594 L94 500 Z', class: 'site-boundary' }, map);
   svgElement('path', { d: 'M111 49 L704 40 L890 118 L932 547 L775 615 L205 593 L95 499 Z', class: 'site-boundary-line' }, map);
   northArrow(map, t, 74, 74);
+  svgElement('rect', { x: 795, y: 562, width: 100, height: 42, rx: 5, class: 'tray' }, map);
   addText(map, t('map.zoneNorth'), 148, 67, 'zone-label');
   addText(map, t('map.zoneNortheast'), 468, 69, 'zone-label');
   addText(map, t('map.zoneWestUpper'), 145, 240, 'zone-label');
   addText(map, t('map.zoneWestLower'), 145, 350, 'zone-label');
   addText(map, t('map.zoneEast'), 847, 244, 'zone-label');
   const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
+  svgElement('circle', { cx: 402, cy: 292, r: 5, class: 'bed-pole' }, facilities);
   polygon(facilities, '785,90 843,108 835,162 777,146', 'landmark skin-roof');
   polygon(facilities, '785,90 814,99 806,154 777,146', 'skin-roof-blue');
   addText(facilities, t('facility.skinDryer'), 811, 178, 'landmark-label-outside');

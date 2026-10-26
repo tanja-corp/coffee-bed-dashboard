@@ -127,6 +127,10 @@ h3 { margin-bottom: .65rem; color: var(--forest); font-size: .82rem; }
 .bed-marker:focus { outline: none; }
 .bed-cell { stroke: #27352a; stroke-width: 1.7; vector-effect: non-scaling-stroke; transition: filter .15s ease, stroke-width .15s ease; }
 .bed-cell.state-unknown { fill: var(--unknown); }
+.bed-unnumbered { cursor: default; }
+.bed-unnumbered .bed-cell { fill: #d8d9c9; stroke-dasharray: 3 3; }
+.bed-unlocated .bed-cell { stroke: #f4f1e4; stroke-dasharray: 5 3; }
+.bed-pole { fill: #39443b; stroke: #d9ddca; stroke-width: 1.5; }
 .bed-cell.state-empty { fill: #fffdf8; stroke-dasharray: 4 3; }
 .bed-cell.state-invalid { fill: url(#invalid-hatch); }
 .bed-cell.state-green { fill: var(--green); }

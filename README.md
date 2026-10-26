@@ -1,6 +1,6 @@
 # Coffee Bed Dashboard
 
-GitHub Pages project for monitoring coffee drying beds at three sites: Shah (80 beds), Bergfrieden (45 beds) and Tingatinga (25 beds).
+GitHub Pages project for monitoring coffee drying beds at three sites: Shah (numbered through 84), Bergfrieden (45 beds) and Tingatinga (25 beds).
 
 ## Sites
 
@@ -21,11 +21,11 @@ GitHub Pages project for monitoring coffee drying beds at three sites: Shah (80 
 ## Dashboard behavior
 
 - The language switcher in the top bar changes the UI between English (default), Kiswahili, and Japanese. A valid `?lang=en`, `?lang=sw`, or `?lang=ja` URL parameter overrides the saved browser preference. Edit interface translations in `site/i18n.js`.
-- `site/index.html` renders the Shah dashboard and an approximate facility diagram based on the five user-provided aerial/reference photos. It marks the drying areas and Factory, Store, Dam, and Skin dryer. The diagram is illustrative, not a surveyed floor plan; actual bed-number-to-position mapping has not been confirmed. The reference photos themselves are not published.
+- `site/index.html` renders the Shah dashboard and an approximate facility diagram based on the supplied photos and annotated field print. It marks the drying areas and Factory, Store, Dam, and Skin dryer. The diagram is illustrative, not a surveyed floor plan. The reference photos themselves are not published. The central-west upper row is numbered 1–21 from right to left; the lower row continues 22–42 from right to left. The north runs are 43–53 and 54–64 from bottom to top. The field annotation places 71 at the top center and 65 at the far left; 65 has an unnumbered bed beside it. Beds 7 and 8 are each one bed despite a pole gap. Bed 66 has no divider, 70 is beside the area marked 24 on the print, and 75 appears twice. Number 68 was not found and sits in an unlocated tray, not at an invented yard position.
 - Selecting a bed shows matching historical rows when its number occurs in the CSV `table_numbers` field. This is a possible history lookup, not confirmation that the bed is currently occupied.
-- The snapshot CSV has no per-bed load dates or use status, so current bed state is shown as unknown. The "Beds in use" card counts, out of all 80 beds, those with an open lot on the live sheet. `no_of_debes` is never treated as a percentage.
+- The snapshot CSV has no per-bed load dates or use status, so current bed state is shown as unknown. The "Beds in use" card counts numbered IDs with an open lot on the live sheet, using 84 as the current numbering ceiling. The unnumbered bed is not tied to sheet data; both 75 shapes use the same record. `no_of_debes` is never treated as a percentage.
 - Age color guide: 0–7 days yellow-green, 8–10 days orange, and 11+ days red. The drying period remains fixed at 14 days. These colors are never assigned to historical rows in the snapshot.
-- Shah's 80 total beds and Nylex condition counts (15 good, 65 worn) are shown as provided. The individual beds corresponding to those condition counts are not identified.
+- Shah's Nylex condition counts (15 good, 65 worn) cover 80 beds in the earlier record; the individual beds corresponding to those counts and the condition of any additional beds are not identified.
 
 ## Updating the snapshot
 
@@ -61,7 +61,7 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 
 ### スマートフォンでの使い方
 
-- 幅720px以下では「マップ」と「一覧」を切り替えられます。一覧は80台を大きなボタン（1列5台）で並べ、色・番号・経過日数が分かります。
+- 幅720px以下では「マップ」と「一覧」を切り替えられます。一覧は番号1〜84を大きなボタン（1列5台）で並べ、色・番号・経過日数が分かります。番号のないベッドは一覧に含みません。
 - マップは「＋」「−」で拡大でき、指でスクロールして動かします。
 - ベッドをタップすると、画面の下に詳細（乗せた日・占有率・経過日数・14日目の予定日・色の理由）が出ます。「×」で閉じます。
 - デモ表示は廃止しました。
@@ -73,7 +73,7 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 - `DRYING_DAYS`: 固定乾燥期間（現在14日）
 - `AGE_GREEN_MAX` / `AGE_ORANGE_MAX`: 色の経過日数境界
 - `MOISTURE_TARGET`: 実測水分の目安値（推定には使いません）
-- `OCCUPANCY_ALERT`: 使用中ベッドの割合の警告（80床のうち何%以上で出すか）
+- `OCCUPANCY_ALERT`: 使用中ベッドの割合の警告（設定上の番号上限に対して何%以上で出すか）
 
 ### ライブ連携（各拠点のタブを直接読む）
 
@@ -86,7 +86,7 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 - 読むのは Tables ブロックの `Date In`、`Table Nos`、`Date Out`（列は見出しで探すので、列を足しても動きます）。`Occupancy %` 列は使いません。
 - `Table Nos` があり `Date Out` が空の行を「そのテーブルに乗っている」と判断します。`Date In` は各ロットの先頭行にだけあるため、下の行へ引き継ぎます。
 - 同じテーブルに複数行ある場合は、一番古い `Date In` で色を決めます。1行に複数のテーブル番号があるときは、その全テーブルを使用中として数えます。
-- 画面の「使用中ベッド」は、全80床のうちロットが乗っているテーブルの数です（例: 52 / 80）。ライブシートを読めない間は「不明」です。使用中が `OCCUPANCY_ALERT`（%）以上になると警告を出します。
+- 画面の「使用中ベッド」は、番号1〜84のうちロットが乗っているテーブル番号の数です。番号のないベッドは含まず、重複する75は1件として数えます。ライブシートを読めない間は「不明」です。使用中が `OCCUPANCY_ALERT`（%）以上になると警告を出します。
 - 乗っている行が1つもないテーブルは「空き」です。引き払ったら `Date Out` を入れてください。入れ忘れると、そのテーブルは使用中のまま日数が増え、赤になります。
 - 日付は `dd/mm/yyyy`（シートの表示形式）で読みます。年の誤入力（例: 2926）は「日付不正」と表示します。
 - `Table Nos` が `4-15` のような範囲表記の未完了行、またはその拠点の床数を超える番号のテーブル（Shah 81番以上、BF 46番以上、TTC 26番以上）は、マップに載せられないため画面に注意書きが出ます。
