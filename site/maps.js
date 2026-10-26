@@ -61,31 +61,31 @@ function shahLayout() {
   const westX = (col) => 130 + col * 17.5;
   for (let col = 0; col < 25; col += 1) {
     const bed = col === 0 ? 70 : 25 - col;
-    const position = { bed, x: westX(col), y: 455, width: 16, height: 88, rotation: 0 };
+    const position = { bed, x: westX(col), y: 455, width: 16, height: 200, rotation: 0 };
     if (bed === 7 || bed === 8) {
       position.segments = [
-        { x: position.x, y: 455, width: 16, height: 40 },
-        { x: position.x, y: 503, width: 16, height: 40 }
+        { x: position.x, y: 455, width: 16, height: 94 },
+        { x: position.x, y: 561, width: 16, height: 94 }
       ];
-      position.labelY = 523;
+      position.labelY = 610;
     }
     layout.push(position);
   }
   for (let col = 0; col < 18; col += 1) {
-    layout.push({ bed: 42 - col, x: westX(col), y: 605, width: 16, height: 125, rotation: 0 });
+    layout.push({ bed: 42 - col, x: westX(col), y: 685, width: 16, height: 200, rotation: 0 });
   }
   // Both north runs point upward: 43 and 54 are at the bottom, 53 and 64 at the top.
   for (let index = 0; index < 11; index += 1) {
     const y = 385 - index * 25;
-    layout.push({ bed: 43 + index, x: 475, y, width: 300, height: 16, rotation: 0 });
-    layout.push({ bed: 54 + index, x: 155, y, width: 300, height: 16, rotation: 0 });
+    layout.push({ bed: 43 + index, x: 365, y, width: 190, height: 16, rotation: 0 });
+    layout.push({ bed: 54 + index, x: 155, y, width: 190, height: 16, rotation: 0 });
   }
   layout.push(column(65, 124, 252, 250, 14, 0));
   layout.push(column(null, 143, 252, 250, 14, 0));
-  layout.push(column(66, 815, 250, 240, 15, 0));
-  layout.push(column(69, 850, 250, 240, 15, 0));
-  layout.push(column(67, 885, 250, 240, 15, 0));
-  layout.push(row(71, 625, 105, 300, 16, 0));
+  layout.push(column(66, 645, 250, 240, 15, 0));
+  layout.push(column(69, 670, 250, 240, 15, 0));
+  layout.push(column(67, 695, 250, 240, 15, 0));
+  layout.push(row(71, 460, 105, 190, 16, 0));
   layout.push(row(72, 881, 445, 72, 14, 0));
   // East: two horizontal lines of six long vertical beds, then a second 75 below.
   [73, 79].forEach((first, group) => {
@@ -94,41 +94,41 @@ function shahLayout() {
     }
   });
   layout.push({ bed: 75, x: 875, y: 795, width: 72, height: 15, rotation: 0 });
-  layout.push({ bed: 68, x: 960, y: 874, width: 72, height: 14, rotation: 0, unlocated: true });
+  layout.push({ bed: 68, x: 960, y: 944, width: 72, height: 14, rotation: 0, unlocated: true });
   return layout;
 }
 
 function drawShah(map, t) {
-  svgElement('rect', { x: 0, y: 0, width: 1120, height: 980, class: 'site-ground' }, map);
-  svgElement('path', { d: 'M116 48 L704 39 L985 118 L1040 820 L820 900 L205 870 L94 760 Z', class: 'site-boundary' }, map);
-  svgElement('path', { d: 'M111 49 L704 40 L984 118 L1039 819 L820 899 L205 869 L95 759 Z', class: 'site-boundary-line' }, map);
+  svgElement('rect', { x: 0, y: 0, width: 1120, height: 1050, class: 'site-ground' }, map);
+  svgElement('path', { d: 'M116 48 L704 39 L985 118 L1040 890 L820 970 L205 970 L94 900 Z', class: 'site-boundary' }, map);
+  svgElement('path', { d: 'M111 49 L704 40 L984 118 L1039 889 L820 969 L205 969 L95 899 Z', class: 'site-boundary-line' }, map);
   northArrow(map, t, 74, 74);
-  svgElement('rect', { x: 946, y: 860, width: 100, height: 42, rx: 5, class: 'tray' }, map);
+  svgElement('rect', { x: 946, y: 930, width: 100, height: 42, rx: 5, class: 'tray' }, map);
   addText(map, t('map.zoneNorth'), 155, 67, 'zone-label');
-  addText(map, t('map.zoneNortheast'), 790, 100, 'zone-label');
+  addText(map, t('map.zoneNortheast'), 630, 100, 'zone-label');
   addText(map, t('map.zoneWestUpper'), 130, 440, 'zone-label');
-  addText(map, t('map.zoneWestLower'), 130, 590, 'zone-label');
+  addText(map, t('map.zoneWestLower'), 130, 675, 'zone-label');
   addText(map, t('map.zoneEast'), 847, 430, 'zone-label');
   const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
-  svgElement('circle', { cx: 444, cy: 499, r: 5, class: 'bed-pole' }, facilities);
-  polygon(facilities, '915,90 973,108 965,162 907,146', 'landmark skin-roof');
-  polygon(facilities, '915,90 944,99 936,154 907,146', 'skin-roof-blue');
-  addText(facilities, t('facility.skinDryer'), 941, 185, 'landmark-label-outside');
+  svgElement('circle', { cx: 444, cy: 555, r: 5, class: 'bed-pole' }, facilities);
+  polygon(facilities, '785,90 843,108 835,162 777,146', 'landmark skin-roof');
+  polygon(facilities, '785,90 814,99 806,154 777,146', 'skin-roof-blue');
+  addText(facilities, t('facility.skinDryer'), 811, 185, 'landmark-label-outside');
   polygon(facilities, '615,430 709,439 700,498 606,488', 'landmark store-roof');
   addText(facilities, t('facility.store'), 657, 465, 'landmark-label');
-  svgElement('circle', { cx: 620, cy: 555, r: 38, class: 'landmark landmark-dam' }, facilities);
-  svgElement('circle', { cx: 620, cy: 555, r: 30, class: 'dam-waterline' }, facilities);
-  addText(facilities, t('facility.dam'), 620, 555, 'landmark-label');
-  polygon(facilities, '620,653 751,662 743,798 610,785', 'landmark factory-roof');
-  svgElement('line', { x1: 630, y1: 690, x2: 743, y2: 698, class: 'roof-ridge' }, facilities);
-  addText(facilities, t('facility.factory'), 681, 726, 'landmark-label');
+  svgElement('circle', { cx: 650, cy: 620, r: 38, class: 'landmark landmark-dam' }, facilities);
+  svgElement('circle', { cx: 650, cy: 620, r: 30, class: 'dam-waterline' }, facilities);
+  addText(facilities, t('facility.dam'), 650, 620, 'landmark-label');
+  polygon(facilities, '620,700 751,709 743,845 610,832', 'landmark factory-roof');
+  svgElement('line', { x1: 630, y1: 737, x2: 743, y2: 745, class: 'roof-ridge' }, facilities);
+  addText(facilities, t('facility.factory'), 681, 773, 'landmark-label');
   polygon(facilities, '772,430 823,433 817,823 765,816', 'long-roof');
   addText(facilities, t('map.washingArea'), 795, 530, 'long-roof-label', { transform: 'rotate(90 795 530)' });
   addText(facilities, t('map.fermentation'), 793, 710, 'long-roof-label', { transform: 'rotate(90 793 710)' });
-  polygon(facilities, '550,640 600,642 598,684 548,681', 'landmark small-roof');
-  polygon(facilities, '548,720 603,724 599,765 544,761', 'landmark small-roof');
-  polygon(facilities, '511,725 542,727 540,765 508,762', 'landmark small-roof');
-  addText(facilities, t('map.smallBuildings'), 548, 795, 'minor-label');
+  polygon(facilities, '525,665 580,667 578,710 523,707', 'landmark small-roof');
+  polygon(facilities, '540,780 600,784 597,825 537,821', 'landmark small-roof');
+  polygon(facilities, '500,785 535,787 532,825 497,822', 'landmark small-roof');
+  addText(facilities, t('map.smallBuildings'), 548, 855, 'minor-label');
 }
 
 /* ---------- Bergfrieden (45 beds, drawn from a hand sketch of the site, 900 x 1600 px scan) ---------- */
@@ -231,7 +231,7 @@ function drawTingatinga(map, t) {
 }
 
 export const SITE_MAPS = {
-  shah: { viewBox: [55, 30, 1020, 920], layout: shahLayout, draw: drawShah },
+  shah: { viewBox: [55, 30, 1020, 1010], layout: shahLayout, draw: drawShah },
   bergfrieden: { viewBox: [20, 290, 822, 932], layout: bergfriedenLayout, draw: drawBergfrieden },
   tingatinga: { viewBox: [62, -8, 552, 630], layout: tingatingaLayout, draw: drawTingatinga }
 };
