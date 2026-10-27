@@ -11,6 +11,7 @@ import {
 import { emptyBeds, liveAdapter, snapshotAdapter } from './adapters.js';
 import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js';
 import { SITE_MAPS, addText, svgElement } from './maps.js';
+import { setupCsvEditor, renderCsvEditor, csvData, openBedEditor, bedEditButton, e } from './editor.js';
 
 export { addText, svgElement };
 
@@ -39,7 +40,8 @@ const appState = {
   todayIso: nairobiTodayIso(),
   selectedBed: null,
   panHintSeen: false,
-  railExpanded: false
+  railExpanded: false,
+  peekExpanded: false
 };
 
 export function parseCsv(text) {
@@ -304,20 +306,18 @@ function drawBed(map, position, bed) {
       horizontal ? centerY + 0.5 : position.y + position.height - 7, 'bed-moisture-icon');
   }
   group.addEventListener('pointerenter', (event) => showTooltip(bed, result, event));
-  group.addEventListener('pointermove', positionTooltipAtPointer);
-  group.addEventListener('pointerleave', () => { if (document.activeElement !== group) hideTooltip(); });
-  group.addEventListener('focus', () => showTooltip(bed, result, null, group));
-  group.addEventListener('blur', hideTooltip);
-  group.addEventListener('click', (event) => {
-    selectBed(bed.bed);
-    if (isMobileLayout()) openBedSheet(bed, result);
-    else if (event.pointerType === 'touch') showTooltip(bed, result, event);
+  group.addEventListener('pointermove', (event) => {
+    if (document.getElementById('map-tooltip').hidden) showTooltip(bed, result, event);
+    else positionTooltipAtPointer(event);
   });
+  group.addEventListener('pointerleave', () => { if (!group.matches(':focus-visible')) hideTooltip(); });
+  group.addEventListener('focus', () => { if (group.matches(':focus-visible')) showTooltip(bed, result, null, group); });
+  group.addEventListener('blur', hideTooltip);
+  group.addEventListener('click', () => inspectBed(bed));
   group.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      selectBed(bed.bed);
-      if (isMobileLayout()) openBedSheet(bed, result);
+      inspectBed(bed);
     }
   });
 }
@@ -334,6 +334,13 @@ function isMobileLayout() {
   return window.matchMedia('(max-width: 720px)').matches;
 }
 
+function inspectBed(bed) {
+  selectBed(bed.bed);
+  hideTooltip();
+  if (isMobileLayout()) openBedSheet(bed, classifyBed(bed));
+  else { closeBedSheet(); openBedEditor(bed.bed); }
+}
+
 function renderBedGrid(beds) {
   const grid = document.getElementById('bed-grid');
   grid.replaceChildren();
@@ -347,10 +354,7 @@ function renderBedGrid(beds) {
     const age = result.age === null ? '' : t('state.days', { count: result.age });
     button.innerHTML = `<strong>${bed.bed}</strong><span class="grid-bed-icon" aria-hidden="true">${escapeHtml(result.confirm ? '!' : result.icon)}</span>` +
       `<small>${escapeHtml(age || result.label)}</small>`;
-    button.addEventListener('click', () => {
-      selectBed(bed.bed);
-      openBedSheet(bed, result);
-    });
+    button.addEventListener('click', () => inspectBed(bed));
     grid.appendChild(button);
   });
 }
@@ -358,15 +362,48 @@ function renderBedGrid(beds) {
 function openBedSheet(bed, result) {
   hideTooltip();
   const sheet = document.getElementById('bed-sheet');
-  sheet.innerHTML = `<button type="button" class="bed-sheet-close" aria-label="${escapeHtml(t('sheet.close'))}">×</button>` +
-    `<div class="bed-sheet-body">${tooltipHtml(bed, result)}</div>`;
+  const planned = bed.inUse && bed.loadDate ? addCalendarDays(bed.loadDate, DRYING_DAYS) : null;
+  const dateOneLabel = bed.inUse ? t('detail.dateIn') : t('detail.dateOut');
+  const dateOne = bed.inUse ? loadDateText(bed) : bed.lastDateOut || '—';
+  const dateTwoLabel = bed.inUse ? e('plannedOut') : t('detail.moisture');
+  const dateTwo = bed.inUse ? planned || '—' : displayMoisture(bed.moisturePercent);
+  const currentStatus = bed.inUse === null ? e('unknown') : bed.inUse ? e('in_use') : e('empty');
+  sheet.innerHTML = `<div class="bed-peek-top"><div class="bed-peek-dragzone"><span class="bed-peek-handle" aria-hidden="true"></span>` +
+    `<strong id="bed-peek-title">${escapeHtml(e('bedTitle', { bed: bed.bed }))}</strong><span class="bed-peek-status state-${result.state}">${escapeHtml(currentStatus)}</span>` +
+    (result.age !== null ? `<span class="bed-peek-age">${escapeHtml(t('state.days', { count: result.age }))}</span>` : '') + '</div>' +
+    `<button type="button" class="bed-sheet-close" aria-label="${escapeHtml(t('sheet.close'))}">×</button></div>` +
+    `<div class="bed-peek-summary"><dl><div><dt>${escapeHtml(dateOneLabel)}</dt><dd>${escapeHtml(dateOne)}</dd></div>` +
+    `<div><dt>${escapeHtml(dateTwoLabel)}</dt><dd>${escapeHtml(dateTwo)}</dd></div></dl>` +
+    `<button type="button" class="bed-peek-edit" data-edit-bed="${bed.bed}">${escapeHtml(e('changeRecord'))}<span aria-hidden="true"> ›</span></button></div>` +
+    `<button type="button" class="bed-peek-expand" aria-expanded="${appState.peekExpanded}" aria-controls="bed-peek-more">${escapeHtml(e(appState.peekExpanded ? 'lessDetail' : 'moreDetail'))}<span aria-hidden="true"> ${appState.peekExpanded ? '⌄' : '⌃'}</span></button>` +
+    `<div id="bed-peek-more" class="bed-peek-more"${appState.peekExpanded ? '' : ' hidden'}>${tooltipHtml(bed, result)}` +
+    (bed.note ? `<p class="bed-peek-note">${escapeHtml(bed.note)}</p>` : '') + '</div>';
+  sheet.setAttribute('aria-labelledby', 'bed-peek-title');
   sheet.querySelector('.bed-sheet-close').addEventListener('click', closeBedSheet);
+  sheet.querySelector('.bed-peek-expand').addEventListener('click', () => {
+    appState.peekExpanded = !appState.peekExpanded;
+    openBedSheet(bed, result);
+    sheet.querySelector('.bed-peek-expand').focus({ preventScroll: true });
+  });
+  const drag = sheet.querySelector('.bed-peek-dragzone');
+  let pointerY = null;
+  drag.addEventListener('pointerdown', (event) => { pointerY = event.clientY; drag.setPointerCapture(event.pointerId); });
+  drag.addEventListener('pointerup', (event) => {
+    if (pointerY === null) return;
+    const distance = event.clientY - pointerY;
+    pointerY = null;
+    if (distance > 40) closeBedSheet();
+    else if (distance < -40) { appState.peekExpanded = true; openBedSheet(bed, result); }
+  });
+  drag.addEventListener('pointercancel', () => { pointerY = null; });
   sheet.dataset.state = result.state;
+  sheet.classList.toggle('is-expanded', appState.peekExpanded);
   sheet.hidden = false;
 }
 
 function closeBedSheet() {
   document.getElementById('bed-sheet').hidden = true;
+  appState.peekExpanded = false;
 }
 
 function applyMobileView() {
@@ -405,6 +442,9 @@ function setupMobileControls() {
   document.getElementById('zoom-in').addEventListener('click', () => setZoom(appState.zoom + 0.75));
   document.getElementById('zoom-out').addEventListener('click', () => setZoom(appState.zoom - 0.75));
   window.matchMedia('(max-width: 720px)').addEventListener('change', () => { closeBedSheet(); applyMobileView(); });
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !document.getElementById('csv-dialog')?.open) closeBedSheet();
+  });
   ['pointerdown', 'wheel'].forEach((type) => document.getElementById('map-frame').addEventListener(type, () => {
     if (appState.panHintSeen) return;
     appState.panHintSeen = true;
@@ -412,9 +452,11 @@ function setupMobileControls() {
   }, { passive: true }));
   let resizeTimer = null;
   window.addEventListener('resize', () => {
+    hideTooltip();
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(fitRail, 150);
   });
+  window.addEventListener('scroll', hideTooltip, true);
   applyMobileView();
 }
 
@@ -436,6 +478,10 @@ function tooltipHtml(bed, result) {
 }
 
 function showTooltip(bed, result, event, target) {
+  if (document.getElementById('csv-dialog')?.open) {
+    hideTooltip();
+    return;
+  }
   const tooltip = document.getElementById('map-tooltip');
   tooltip.innerHTML = tooltipHtml(bed, result);
   tooltip.hidden = false;
@@ -462,10 +508,13 @@ function positionTooltipAtElement(element) {
 
 function placeTooltip(left, top, frameBounds) {
   const tooltip = document.getElementById('map-tooltip');
-  const maxLeft = Math.max(8, frameBounds.width - tooltip.offsetWidth - 8);
-  const maxTop = Math.max(8, frameBounds.height - tooltip.offsetHeight - 8);
-  tooltip.style.left = `${Math.max(8, Math.min(left, maxLeft))}px`;
-  tooltip.style.top = `${Math.max(8, Math.min(top, maxTop))}px`;
+  const width = tooltip.offsetWidth, height = tooltip.offsetHeight;
+  const viewportWidth = document.documentElement.clientWidth;
+  const x = frameBounds.left + left, y = frameBounds.top + top;
+  const preferredX = x + width > viewportWidth - 8 ? x - width - 28 : x;
+  const preferredY = y + height > window.innerHeight - 8 ? y - height - 28 : y;
+  tooltip.style.left = `${Math.max(8, Math.min(preferredX, viewportWidth - width - 8))}px`;
+  tooltip.style.top = `${Math.max(8, Math.min(preferredY, window.innerHeight - height - 8))}px`;
 }
 
 function hideTooltip() {
@@ -515,6 +564,8 @@ export function selectBed(id, recordsByBed = appState.history) {
         `<div class="detail-item detail-wide"><dt>${escapeHtml(t('detail.moisture'))}</dt><dd>${escapeHtml(displayMoisture(bed.moisturePercent))}</dd></div>` +
       '</dl>' +
       (currentFlags.length ? `<div class="detail-flags">${currentFlags.join('')}</div>` : '') +
+      (bed.note ? `<p class="csv-note"><strong>${escapeHtml(e('noteLabel'))}</strong><br>${escapeHtml(bed.note)}</p>` : '') +
+      bedEditButton(id) +
     '</section>' +
     '<section class="history-section">' +
       `<h3>${escapeHtml(t('detail.history'))}</h3>${historyHtml}` +
@@ -546,14 +597,14 @@ export function renderRecords(records) {
     `<div class="record-row header"><span>${escapeHtml(t('history.headerIn'))}</span><span>${escapeHtml(t('history.headerOut'))}</span><span>${escapeHtml(t('history.headerBed'))}</span><span>${escapeHtml(t('history.headerLot'))}</span><span>${escapeHtml(t('history.headerMoisture'))}</span></div>` +
     dated.slice(0, 8).map((record) =>
       '<div class="record-row">' +
-        `<strong>${escapeHtml(displayDate(record.dryer_date_in))}</strong>` +
-        `<span>${escapeHtml(displayDate(record.dryer_date_out))}</span>` +
-        `<span>${escapeHtml(record.table_numbers || '—')}</span>` +
-        `<span>${escapeHtml(record.storage_lot_no || record.storage_lot || '—')}</span>` +
-        `<span>${escapeHtml(record.moisture_percent ? `${record.moisture_percent}%` : '—')}</span>` +
+        `<strong data-label="${escapeHtml(t('history.headerIn'))}">${escapeHtml(displayDate(record.dryer_date_in))}</strong>` +
+        `<span data-label="${escapeHtml(t('history.headerOut'))}">${escapeHtml(displayDate(record.dryer_date_out))}</span>` +
+        `<span data-label="${escapeHtml(t('history.headerBed'))}">${escapeHtml(record.table_numbers || '—')}</span>` +
+        `<span data-label="${escapeHtml(t('history.headerLot'))}">${escapeHtml(record.storage_lot_no || record.storage_lot || '—')}</span>` +
+        `<span data-label="${escapeHtml(t('history.headerMoisture'))}">${escapeHtml(record.moisture_percent ? `${record.moisture_percent}%` : '—')}</span>` +
       '</div>'
     ).join('') +
-    `<p class="records-note">${escapeHtml(t('history.note'))}${future ? ` ${escapeHtml(t('history.futureHidden', { count: future }))}` : ''}</p>`;
+    `<p class="records-note">${escapeHtml(data.csv ? e('historyNote') : t('history.note'))}${future ? ` ${escapeHtml(t('history.futureHidden', { count: future }))}` : ''}</p>`;
 }
 
 function stateCounts(beds) {
@@ -759,7 +810,7 @@ function applySiteCopy() {
   const name = siteName();
   document.title = t('page.title', { site: name });
   document.getElementById('site-title').textContent = name;
-  document.getElementById('footer-site').textContent = t('footer.snapshot', { site: name });
+  document.getElementById('footer-site').textContent = currentData().csv ? `${name} · ${e('csvMode')}` : t('footer.snapshot', { site: name });
   const noteKey = `map.note.${site.id}`;
   document.getElementById('map-site-note').textContent = t(noteKey, { count: site.bedCount });
   document.getElementById('map-number-note').hidden = site.id === 'shah';
@@ -767,7 +818,7 @@ function applySiteCopy() {
 }
 
 function currentData() {
-  return appState.sites.get(appState.site.id) || { status: 'loading' };
+  return csvData(appState.site, appState.sites.get(appState.site.id) || { status: 'loading' });
 }
 
 function updateSnapshotUi() {
@@ -775,6 +826,7 @@ function updateSnapshotUi() {
   const data = currentData();
   snapshot.className = 'snapshot-date';
   if (data.status === 'loading') snapshot.textContent = t('loading.csv');
+  else if (data.csv) { snapshot.textContent = e('csvMode'); snapshot.classList.add('is-local'); }
   else if (data.live) { snapshot.textContent = t('snapshot.live', { tab: appState.site.tab }); snapshot.classList.add('is-live'); }
   else if (data.snapshotAvailable) snapshot.textContent = t('snapshot.label', { date: data.sourceInfo.snapshot_date || t('snapshot.unknown') });
   else { snapshot.textContent = t('snapshot.failed'); snapshot.classList.add('is-failed'); }
@@ -788,6 +840,8 @@ function renderDataAlert() {
   alert.className = 'data-alert';
   if (data.status === 'loading') {
     status.textContent = t('data.checking', { site: siteName() });
+  } else if (data.csv) {
+    status.textContent = e('csvNotice');
   } else if (data.live) {
     const warnings = data.warnings || { unparsedOpenRows: 0, outOfRangeTables: [] };
     const notes = [t('data.live', { site: siteName(), tab: site.tab })];
@@ -821,7 +875,7 @@ function compactRanges(numbers) {
 }
 
 function updateSourceLinks() {
-  const data = currentData();
+  const data = appState.sites.get(appState.site.id) || {};
   const site = appState.site;
   const live = Boolean(data.live || (!data.snapshotAvailable && site.sheetUrl));
   const href = live ? site.sheetUrl : site.snapshotCsvUrl;
@@ -844,7 +898,7 @@ function updateSourceLinks() {
 function renderSiteTabs() {
   document.querySelectorAll('#site-tabs [data-site]').forEach((tab) => {
     const site = SITES.find((entry) => entry.id === tab.dataset.site);
-    const data = appState.sites.get(site.id);
+    const data = csvData(site, appState.sites.get(site.id));
     const selected = site.id === appState.site.id;
     tab.setAttribute('aria-selected', String(selected));
     tab.tabIndex = selected ? 0 : -1;
@@ -875,7 +929,12 @@ function renderCurrentSite() {
   fitRail();
   if (appState.selectedBed && appState.bedById.has(appState.selectedBed)) selectBed(appState.selectedBed);
   else resetSelection();
+  if (!document.getElementById('bed-sheet').hidden && appState.selectedBed) {
+    const bed = appState.bedById.get(appState.selectedBed);
+    if (bed) openBedSheet(bed, classifyBed(bed));
+  }
   renderDataAlert();
+  renderCsvEditor();
 }
 
 function resetSelection() {
@@ -968,9 +1027,8 @@ function setupSiteTabs() {
     const chip = event.target.closest('[data-select-bed]');
     if (!chip) return;
     const id = Number(chip.dataset.selectBed);
-    selectBed(id);
     const bed = appState.bedById.get(id);
-    if (isMobileLayout() && bed) openBedSheet(bed, classifyBed(bed));
+    if (bed) inspectBed(bed);
   });
 }
 
@@ -1060,6 +1118,22 @@ function initialize() {
   setupLanguageSwitcher();
   setupSiteTabs();
   setupMobileControls();
+  setupCsvEditor({
+    getSite: () => appState.site,
+    getData: (site) => appState.sites.get(site.id) || { status: 'loading' },
+    getToday: nairobiTodayIso,
+    onPreview: (id) => {
+      const bed = appState.bedById.get(id);
+      if (!bed) return;
+      selectBed(id);
+      if (isMobileLayout()) openBedSheet(bed, classifyBed(bed));
+      else {
+        closeBedSheet();
+        document.querySelector(`[data-bed-group="${id}"]`)?.focus({ preventScroll: true });
+      }
+    },
+    onChange: renderCurrentSite
+  });
   renderCurrentSite();
   // All three tabs load in parallel so the header can show each site's beds in use.
   SITES.forEach((site) => {
