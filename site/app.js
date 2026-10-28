@@ -269,7 +269,8 @@ function drawBed(map, position, bed) {
   const result = classifyBed(bed);
   const centerX = position.x + position.width / 2;
   const centerY = position.y + position.height / 2;
-  const transform = position.rotation ? `rotate(${position.rotation} ${centerX} ${centerY})` : '';
+  const [rotationX, rotationY] = position.rotationCenter || [centerX, centerY];
+  const transform = position.rotation ? `rotate(${position.rotation} ${rotationX} ${rotationY})` : '';
   const extraClass = (position.inferred ? ' bed-inferred' : '') + (position.unlocated ? ' bed-unlocated' : '');
   const group = svgElement('g', {
     class: `bed-marker state-${result.state}${result.confirm ? ' state-confirm' : ''}${extraClass}`,
@@ -814,7 +815,7 @@ function applySiteCopy() {
   const noteKey = `map.note.${site.id}`;
   document.getElementById('map-site-note').textContent = t(noteKey, { count: site.bedCount });
   document.getElementById('map-number-note').hidden = site.id === 'shah';
-  document.getElementById('legend-unlocated').hidden = !['shah', 'tingatinga'].includes(site.id);
+  document.getElementById('legend-unlocated').hidden = site.id !== 'shah';
 }
 
 function currentData() {

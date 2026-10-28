@@ -27,10 +27,6 @@ function column(bed, cx, cy, length, thickness, rotation, extra) {
   return { bed, x: cx - thickness / 2, y: cy - length / 2, width: thickness, height: length, rotation, ...extra };
 }
 
-function numbered(entries) {
-  return entries.map((entry, index) => entry(index + 1));
-}
-
 function northArrow(map, t, x, y) {
   svgElement('path', { d: `M${x} ${y + 8} L${x} ${y - 25} M${x} ${y - 25} L${x - 7} ${y - 13} M${x} ${y - 25} L${x + 7} ${y - 13}`, class: 'north-arrow' }, map);
   addText(map, t('map.north'), x, y + 24, 'north-label');
@@ -191,17 +187,23 @@ function drawBergfrieden(map, t) {
 }
 
 /* ---------- Tingatinga (25 beds, traced from one satellite image, 514 x 642 px) ---------- */
-// 19 beds are visible in the photo (9 north, 10 south, running about 4° off north).
-// The remaining 6 sit in a tray outside the east hedge until their positions are known.
+// Beds 17–25 run along the north side. Beds 1–8 and paired beds 9/10 through 15/16
+// run along the south side. Beds 1–4 are shorter than the other beds.
+
+const TINGATINGA_PAIRS = [274, 307, 340, 373];
 
 function tingatingaLayout() {
   const north = [117, 134.5, 152, 169.5, 187, 204.5, 222, 239.5, 257]
-    .map((cx) => (bed) => column(bed, cx, 148, 220, 13, -4));
-  const south = [127, 146, 165, 184, 203, 222, 241, 260, 279, 298]
-    .map((cx) => (bed) => column(bed, cx, 425, 230, 14, -3.5));
-  const tray = [0, 1, 2, 3, 4, 5]
-    .map((index) => (bed) => column(bed, 518 + (index % 3) * 28, 368 + Math.floor(index / 3) * 70, 50, 18, 0, { unlocated: true }));
-  return numbered([...north, ...south, ...tray]);
+    .map((cx, index) => column(17 + index, cx, 148, 180, 13, -4));
+  const southSingles = [110, 128, 146, 164, 182, 200, 218, 236]
+    .map((cx, index) => ({ bed: index + 1, x: cx - 7, y: 335, width: 14,
+      height: index < 4 ? 145 : 180, rotation: -3.5, rotationCenter: [cx, 425] }));
+  // Draw the lower tier first so the odd-numbered upper tier sits in front at the overlap.
+  const southPairs = TINGATINGA_PAIRS.flatMap((cx, index) => [
+    column(10 + index * 2, cx + 2, 468.5, 93, 14, -3.5, { rotationCenter: [cx, 425] }),
+    column(9 + index * 2, cx - 2, 381.5, 93, 14, -3.5, { rotationCenter: [cx, 425] })
+  ]);
+  return [...north, ...southSingles, ...southPairs];
 }
 
 function drawTingatinga(map, t) {
@@ -212,8 +214,8 @@ function drawTingatinga(map, t) {
   svgElement('path', { d: 'M100 640 C140 600 230 592 300 606 C340 614 370 628 380 640 Z', class: 'canopy' }, ground);
   svgElement('polyline', { points: '420,-20 447,250 470,640', class: 'hedge-line' }, ground);
   svgElement('rect', { x: 100, y: 28, width: 168, height: 238, rx: 3, class: 'slab', transform: 'rotate(-4 184 147)' }, ground);
-  svgElement('rect', { x: 114, y: 302, width: 198, height: 248, rx: 3, class: 'slab', transform: 'rotate(-3.5 213 426)' }, ground);
-  polygon(ground, '330,286 382,288 384,372 331,370', 'gravel');
+  svgElement('rect', { x: 98, y: 322, width: 288, height: 206, rx: 3, class: 'slab', transform: 'rotate(-3.5 242 425)' }, ground);
+  polygon(ground, '330,268 382,270 384,304 331,302', 'gravel');
 
   const facilities = svgElement('g', { class: 'facilities', 'aria-label': t('map.facilitiesAria') }, map);
   polygon(facilities, '318,76 404,62 432,236 345,250', 'landmark store-roof');
@@ -225,9 +227,7 @@ function drawTingatinga(map, t) {
   northArrow(map, t, 466, 52);
   addText(map, t('map.zoneNorthBlock'), 100, 16, 'zone-label');
   addText(map, t('map.zoneSouthBlock'), 114, 292, 'zone-label');
-
-  svgElement('rect', { x: 488, y: 286, width: 116, height: 200, rx: 6, class: 'tray' }, map);
-  twoLines(t('map.unlocated')).forEach((line, index) => addText(map, line, 546, 306 + index * 14, 'tray-label', { 'text-anchor': 'middle' }));
+  addText(map, t('map.tingatingaTwoTier'), 250, 555, 'zone-label', { 'text-anchor': 'middle' });
 }
 
 export const SITE_MAPS = {
