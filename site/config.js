@@ -16,7 +16,7 @@ const sheetUrl = (gid) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/ed
 // nylex: bed cover condition counts as provided; null when not recorded.
 export const SITES = [
   {
-    id: 'shah', tab: 'Shah', bedCount: 84,
+    id: 'shah', tab: 'Shah', bedCount: 86,
     statusUrl: csvUrl('1305145'), sheetUrl: sheetUrl('1305145'),
     snapshotCsvUrl: './data/shah-drying-records.csv', sourceInfoUrl: './data/source-info.json',
     nylex: { good: 15, worn: 65 }, mobileZoom: 2

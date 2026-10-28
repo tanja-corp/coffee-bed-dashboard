@@ -7,10 +7,10 @@ import {
   OCCUPANCY_ALERT,
   SITES,
   TZ
-} from './config.js?v=readonly-20261028c';
-import { emptyBeds, liveAdapter, snapshotAdapter } from './adapters.js?v=readonly-20261028c';
-import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js?v=readonly-20261028c';
-import { SITE_MAPS, addText, svgElement } from './maps.js?v=readonly-20261028c';
+} from './config.js?v=shah-beds-20261029';
+import { emptyBeds, liveAdapter, snapshotAdapter } from './adapters.js?v=shah-beds-20261029';
+import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js?v=shah-beds-20261029';
+import { SITE_MAPS, addText, svgElement } from './maps.js?v=shah-beds-20261029';
 
 export { addText, svgElement };
 
@@ -809,7 +809,7 @@ function applySiteCopy() {
   const noteKey = `map.note.${site.id}`;
   document.getElementById('map-site-note').textContent = t(noteKey, { count: site.bedCount });
   document.getElementById('map-number-note').hidden = site.id === 'shah';
-  document.getElementById('legend-unlocated').hidden = site.id !== 'shah';
+  document.getElementById('legend-unlocated').hidden = !bedLayout(site).some((position) => position.unlocated);
 }
 
 function currentData() {
