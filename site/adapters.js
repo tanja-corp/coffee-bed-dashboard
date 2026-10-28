@@ -1,6 +1,6 @@
-import { CURRENT_STATUS_DATE_ORDER } from './config.js';
-import { parseTraceability } from './traceability.js';
-import { bedIds, parseCsv } from './app.js';
+import { CURRENT_STATUS_DATE_ORDER } from './config.js?v=readonly-20261028c';
+import { parseTraceability } from './traceability.js?v=readonly-20261028c';
+import { bedIds, parseCsv } from './app.js?v=readonly-20261028c';
 
 export function emptyBeds(bedCount, source) {
   return Array.from({ length: bedCount }, (_, index) => ({

@@ -7,10 +7,10 @@ import {
   OCCUPANCY_ALERT,
   SITES,
   TZ
-} from './config.js';
-import { emptyBeds, liveAdapter, snapshotAdapter } from './adapters.js';
-import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js';
-import { SITE_MAPS, addText, svgElement } from './maps.js';
+} from './config.js?v=readonly-20261028c';
+import { emptyBeds, liveAdapter, snapshotAdapter } from './adapters.js?v=readonly-20261028c';
+import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js?v=readonly-20261028c';
+import { SITE_MAPS, addText, svgElement } from './maps.js?v=readonly-20261028c';
 
 export { addText, svgElement };
 
