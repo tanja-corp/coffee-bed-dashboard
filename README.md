@@ -27,24 +27,13 @@ GitHub Pages project for monitoring coffee drying beds at three sites: Shah (num
 - Age color guide: 0–7 days yellow-green, 8–10 days orange, and 11+ days red. The drying period remains fixed at 14 days. These colors are never assigned to historical rows in the snapshot.
 - Shah's Nylex condition counts (15 good, 65 worn) cover 80 beds in the earlier record; the individual beds corresponding to those counts and the condition of any additional beds are not identified.
 
-## Edit bed states from the dashboard
+## Read-only source links
 
-On desktop, select a bed once to open its current state and populated input fields in a bottom sheet up to 1,040px wide. The left side shows the current state; the right side contains the entry form. For an occupied bed, the existing record is selected for correction by default; clearing the bed is a separate action within the form. Merely opening or closing the sheet creates no draft. Hover details show the load date, planned or actual clearing date, elapsed days and measured moisture. They fit inside the viewport and disappear while the entry sheet is open. CSV file actions live under the small **CSV** control beside the source link. CSV editing is a separate, local working copy for each site. The live Google Sheet and the published Shah snapshot remain read-only.
-
-- On phones, selecting a bed first opens a collapsed status sheet showing the bed number, current state, age and key dates in roughly 130px. Other beds remain tappable. **More detail** expands it; the close button or a downward swipe on its heading dismisses it. **Update** opens the entry form in a separate narrow bottom sheet. Load coffee, clear an occupied bed, correct its details, or confirm an unknown bed is empty. Dates use the Nairobi calendar day; measured moisture is optional.
-- **Apply to draft** updates the map, counts, due dates, history and status sheet immediately. It does not save the CSV. Only actual edits create the compact fixed save bar. Select the change count to review a vertical list; the undo arrow reverses the last operation (up to 30 operations during the current session). Cancelling a new form leaves the live source untouched.
-- **Save CSV** writes to a file chosen through the browser's file picker when supported (secure-context Chrome/Edge). Reopen an existing CSV to connect it for direct writes. The original file text is checked before a subsequent write; an external change stops the save instead of overwriting it. File permissions remain under the browser's control.
-- Other browsers save a UTF-8 CSV with a BOM by download. A download notification says that the download started; the browser cannot confirm where the user ultimately stored it. **File options** also offers a copy/download. Downloading a copy of a directly connected file leaves that file's unsaved changes pending.
-- Success notifications disappear after about 4.5 seconds and pause while hovered/focused or while the tab is hidden. Errors remain until dismissed or replaced. File errors from an open bottom sheet appear inside that sheet.
-- Drafts stay in memory only while this page is open. Reloading, leaving the page or returning through browser history clears the draft and pending-save bar; there is no draft recovery or leave-page prompt. The previous version's saved browser drafts are removed on startup. To retain changes, save the CSV and reopen it after reloading. Tabs have independent drafts and cannot disable each other's controls; an external change to a connected CSV still stops an overwrite. Undoing every edit or applying unchanged values also clears/avoids the save bar. Closing a dirty form within the page still asks before discarding its input. No records are uploaded by the editor.
-
-The dedicated CSV columns are `site,bed,status,date_in,date_out,moisture_percent,note,updated_at`. `status` is `unknown`, `empty` or `in_use`. Dates are `YYYY-MM-DD`; site IDs match `SITES` in `site/config.js`. The final row for each numbered bed is its current state. Earlier rows must be closed cycles, so clearing and subsequently reloading one bed preserves its history. Every bed in the selected site must be represented. The initial copy contains current bed states and available last-cleared dates; it does not convert the source workbook's full lot history, quantities or grades. Historical snapshots alone never establish current occupancy. Use **File options → Return to live source** after saving to return to the source sheet view.
-
-Run the CSV data-integrity checks with `node --test tests/bed-csv.test.mjs`. No package installation or build step is required.
+The dashboard reads the current bed status from Google Sheets CSV exports. The CSV control at the top right of the map opens the selected site's source CSV in one click. Selecting a bed only reveals its current status and history; changes cannot be written from this static dashboard. The source workbook remains the place to edit bed records.
 
 ## Updating the snapshot
 
-The published snapshot has no write endpoint. The dashboard reads current data from the configured Google Sheets CSV exports; the bed editor saves a separate local bed-status CSV. To refresh the published historical snapshot, export/filter Shah rows from the approved source, review that no other farm's data is included, update `site/data/shah-drying-records.csv` and `site/data/source-info.json`, then commit and push to `main`. GitHub Actions will redeploy the `site/` directory. Never add API keys or service account credentials to this public repository.
+The published snapshot has no write endpoint. To refresh the historical Shah snapshot, export/filter Shah rows from the approved source, review that no other farm's data is included, update `site/data/shah-drying-records.csv` and `site/data/source-info.json`, then commit and push to `main`. GitHub Actions will redeploy the `site/` directory. Never add API keys or service account credentials to this public repository.
 
 For local preview, run a static HTTP server from the repository root and open `http://localhost:8000/site/` (for example: `python -m http.server 8000`). Opening `index.html` as a `file://` URL may block CSV fetches in the browser.
 
@@ -64,11 +53,7 @@ GitHub Pages deploys the `site/` directory on pushes to `main` via `.github/work
 
 ### CSVスナップショットの更新
 
-PCでは、ベッドを1回クリックすると、左に現在の状況、右に現在値が入った入力欄を備えた広いボトムシートが開きます。使用中の床は「記録を修正」が初期選択です。下ろす場合はシート内で操作を切り替えます。ホバーでは乗せた日・下ろす予定／実績・経過日数・実測水分を確認でき、入力シートを開くと重複表示しません。スマホでは、小さな状態確認シートで背景のマップ・一覧を操作したまま他の床を確認でき、「詳しく見る」で展開、×または見出しの下スワイプで閉じられます。スマホで入力する場合は「記録を変更」を押してください。いずれも確認して閉じるだけでは下書きを作りません。「下書きに反映」の後、「CSVに保存」でファイルへ保存してください。成功通知は約4.5秒で消えます。実際に変更したときだけ、画面下部にコンパクトな保存バーが出ます。対応ブラウザでは選択したCSVへ直接保存し、それ以外はダウンロードします。以前のファイルはマップ横の小さな「CSV」ボタンから開けます。
-
-ベッド状態CSVは拠点ごとの専用形式です。元のGoogle Sheetsや公開スナップショットへの書き戻し、他端末との自動共有は行いません。下ろした記録は乾燥履歴として残ります。公開スナップショット自体を更新する場合は、次の手順を使います。
-
-下書きは開いているページ内だけで保持します。再読み込み・ページ移動・ブラウザの履歴からの復帰では下書きを破棄し、「CSV未保存」のバーを消します。残す変更は先にCSVへ保存してください。以前ブラウザ内に保存された下書きは復元せず削除します。別タブの操作によってボタンを無効にすることもありません。
+上部マップ右上の「CSV」を押すと、選択中の拠点の元CSVを直接開きます。ベッドを選ぶと状態と履歴を確認できます。ダッシュボードは読み取り専用です。ベッド状況を変更する場合は元のトレーサビリティシートを編集してください。以下は公開Shahスナップショットの更新手順です。
 
 1. 承認済みの元XLSXから、Storage Lotが `SH-` のShah行だけを抽出します。
 2. BF、Tingatinga、その他農園の行が混ざっていないことを確認します。
