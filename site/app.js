@@ -11,7 +11,6 @@ import {
 import { emptyBeds, liveAdapter, snapshotAdapter } from './adapters.js';
 import { applyTranslations, getLanguage, isSupportedLanguage, setLanguage, t } from './i18n.js';
 import { SITE_MAPS, addText, svgElement } from './maps.js';
-import { setupCsvEditor, renderCsvEditor, csvData, openBedEditor, bedEditButton, e } from './editor.js';
 
 export { addText, svgElement };
 
@@ -339,7 +338,7 @@ function inspectBed(bed) {
   selectBed(bed.bed);
   hideTooltip();
   if (isMobileLayout()) openBedSheet(bed, classifyBed(bed));
-  else { closeBedSheet(); openBedEditor(bed.bed); }
+  else closeBedSheet();
 }
 
 function renderBedGrid(beds) {
@@ -366,17 +365,17 @@ function openBedSheet(bed, result) {
   const planned = bed.inUse && bed.loadDate ? addCalendarDays(bed.loadDate, DRYING_DAYS) : null;
   const dateOneLabel = bed.inUse ? t('detail.dateIn') : t('detail.dateOut');
   const dateOne = bed.inUse ? loadDateText(bed) : bed.lastDateOut || '—';
-  const dateTwoLabel = bed.inUse ? e('plannedOut') : t('detail.moisture');
+  const dateTwoLabel = bed.inUse ? t('detail.day14') : t('detail.moisture');
   const dateTwo = bed.inUse ? planned || '—' : displayMoisture(bed.moisturePercent);
-  const currentStatus = bed.inUse === null ? e('unknown') : bed.inUse ? e('in_use') : e('empty');
+  const currentStatus = bed.inUse === null ? t('state.unknown') : bed.inUse ? t('value.inUse') : t('state.empty');
   sheet.innerHTML = `<div class="bed-peek-top"><div class="bed-peek-dragzone"><span class="bed-peek-handle" aria-hidden="true"></span>` +
-    `<strong id="bed-peek-title">${escapeHtml(e('bedTitle', { bed: bed.bed }))}</strong><span class="bed-peek-status state-${result.state}">${escapeHtml(currentStatus)}</span>` +
+    `<strong id="bed-peek-title">${escapeHtml(t('bed.name'))} ${bed.bed}</strong><span class="bed-peek-status state-${result.state}">${escapeHtml(currentStatus)}</span>` +
     (result.age !== null ? `<span class="bed-peek-age">${escapeHtml(t('state.days', { count: result.age }))}</span>` : '') + '</div>' +
     `<button type="button" class="bed-sheet-close" aria-label="${escapeHtml(t('sheet.close'))}">×</button></div>` +
     `<div class="bed-peek-summary"><dl><div><dt>${escapeHtml(dateOneLabel)}</dt><dd>${escapeHtml(dateOne)}</dd></div>` +
     `<div><dt>${escapeHtml(dateTwoLabel)}</dt><dd>${escapeHtml(dateTwo)}</dd></div></dl>` +
-    `<button type="button" class="bed-peek-edit" data-edit-bed="${bed.bed}">${escapeHtml(e('changeRecord'))}<span aria-hidden="true"> ›</span></button></div>` +
-    `<button type="button" class="bed-peek-expand" aria-expanded="${appState.peekExpanded}" aria-controls="bed-peek-more">${escapeHtml(e(appState.peekExpanded ? 'lessDetail' : 'moreDetail'))}<span aria-hidden="true"> ${appState.peekExpanded ? '⌄' : '⌃'}</span></button>` +
+    '</div>' +
+    `<button type="button" class="bed-peek-expand" aria-expanded="${appState.peekExpanded}" aria-controls="bed-peek-more">${escapeHtml(t(appState.peekExpanded ? 'detail.less' : 'detail.more'))}<span aria-hidden="true"> ${appState.peekExpanded ? '⌄' : '⌃'}</span></button>` +
     `<div id="bed-peek-more" class="bed-peek-more"${appState.peekExpanded ? '' : ' hidden'}>${tooltipHtml(bed, result)}` +
     (bed.note ? `<p class="bed-peek-note">${escapeHtml(bed.note)}</p>` : '') + '</div>';
   sheet.setAttribute('aria-labelledby', 'bed-peek-title');
@@ -444,7 +443,7 @@ function setupMobileControls() {
   document.getElementById('zoom-out').addEventListener('click', () => setZoom(appState.zoom - 0.75));
   window.matchMedia('(max-width: 720px)').addEventListener('change', () => { closeBedSheet(); applyMobileView(); });
   window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !document.getElementById('csv-dialog')?.open) closeBedSheet();
+    if (event.key === 'Escape') closeBedSheet();
   });
   ['pointerdown', 'wheel'].forEach((type) => document.getElementById('map-frame').addEventListener(type, () => {
     if (appState.panHintSeen) return;
@@ -479,10 +478,6 @@ function tooltipHtml(bed, result) {
 }
 
 function showTooltip(bed, result, event, target) {
-  if (document.getElementById('csv-dialog')?.open) {
-    hideTooltip();
-    return;
-  }
   const tooltip = document.getElementById('map-tooltip');
   tooltip.innerHTML = tooltipHtml(bed, result);
   tooltip.hidden = false;
@@ -565,8 +560,7 @@ export function selectBed(id, recordsByBed = appState.history) {
         `<div class="detail-item detail-wide"><dt>${escapeHtml(t('detail.moisture'))}</dt><dd>${escapeHtml(displayMoisture(bed.moisturePercent))}</dd></div>` +
       '</dl>' +
       (currentFlags.length ? `<div class="detail-flags">${currentFlags.join('')}</div>` : '') +
-      (bed.note ? `<p class="csv-note"><strong>${escapeHtml(e('noteLabel'))}</strong><br>${escapeHtml(bed.note)}</p>` : '') +
-      bedEditButton(id) +
+      (bed.note ? `<p class="csv-note"><strong>${escapeHtml(t('detail.current'))}</strong><br>${escapeHtml(bed.note)}</p>` : '') +
     '</section>' +
     '<section class="history-section">' +
       `<h3>${escapeHtml(t('detail.history'))}</h3>${historyHtml}` +
@@ -605,7 +599,7 @@ export function renderRecords(records) {
         `<span data-label="${escapeHtml(t('history.headerMoisture'))}">${escapeHtml(record.moisture_percent ? `${record.moisture_percent}%` : '—')}</span>` +
       '</div>'
     ).join('') +
-    `<p class="records-note">${escapeHtml(data.csv ? e('historyNote') : t('history.note'))}${future ? ` ${escapeHtml(t('history.futureHidden', { count: future }))}` : ''}</p>`;
+    `<p class="records-note">${escapeHtml(t('history.note'))}${future ? ` ${escapeHtml(t('history.futureHidden', { count: future }))}` : ''}</p>`;
 }
 
 function stateCounts(beds) {
@@ -811,7 +805,7 @@ function applySiteCopy() {
   const name = siteName();
   document.title = t('page.title', { site: name });
   document.getElementById('site-title').textContent = name;
-  document.getElementById('footer-site').textContent = currentData().csv ? `${name} · ${e('csvMode')}` : t('footer.snapshot', { site: name });
+  document.getElementById('footer-site').textContent = t('footer.snapshot', { site: name });
   const noteKey = `map.note.${site.id}`;
   document.getElementById('map-site-note').textContent = t(noteKey, { count: site.bedCount });
   document.getElementById('map-number-note').hidden = site.id === 'shah';
@@ -819,7 +813,7 @@ function applySiteCopy() {
 }
 
 function currentData() {
-  return csvData(appState.site, appState.sites.get(appState.site.id) || { status: 'loading' });
+  return appState.sites.get(appState.site.id) || { status: 'loading' };
 }
 
 function updateSnapshotUi() {
@@ -827,7 +821,6 @@ function updateSnapshotUi() {
   const data = currentData();
   snapshot.className = 'snapshot-date';
   if (data.status === 'loading') snapshot.textContent = t('loading.csv');
-  else if (data.csv) { snapshot.textContent = e('csvMode'); snapshot.classList.add('is-local'); }
   else if (data.live) { snapshot.textContent = t('snapshot.live', { tab: appState.site.tab }); snapshot.classList.add('is-live'); }
   else if (data.snapshotAvailable) snapshot.textContent = t('snapshot.label', { date: data.sourceInfo.snapshot_date || t('snapshot.unknown') });
   else { snapshot.textContent = t('snapshot.failed'); snapshot.classList.add('is-failed'); }
@@ -841,8 +834,6 @@ function renderDataAlert() {
   alert.className = 'data-alert';
   if (data.status === 'loading') {
     status.textContent = t('data.checking', { site: siteName() });
-  } else if (data.csv) {
-    status.textContent = e('csvNotice');
   } else if (data.live) {
     const warnings = data.warnings || { unparsedOpenRows: 0, outOfRangeTables: [] };
     const notes = [t('data.live', { site: siteName(), tab: site.tab })];
@@ -879,8 +870,30 @@ function updateSourceLinks() {
   const data = appState.sites.get(appState.site.id) || {};
   const site = appState.site;
   const live = Boolean(data.live || (!data.snapshotAvailable && site.sheetUrl));
-  const href = live ? site.sheetUrl : site.snapshotCsvUrl;
-  document.querySelectorAll('.source-link, .text-link').forEach((link) => {
+  const csvLink = document.querySelector('.source-link');
+  const csvHref = live ? site.statusUrl : site.snapshotCsvUrl;
+  csvLink.hidden = !csvHref;
+  if (csvHref) {
+    csvLink.href = csvHref;
+    csvLink.target = '_blank';
+    csvLink.rel = 'noopener';
+    const label = csvLink.querySelector('[data-i18n]');
+    label.dataset.i18n = 'source.open';
+    label.textContent = t('source.open');
+  }
+  const sheetLink = document.querySelector('.sheet-link');
+  const sheetHref = live ? site.sheetUrl : site.snapshotCsvUrl;
+  sheetLink.hidden = !sheetHref;
+  if (sheetHref) {
+    sheetLink.href = sheetHref;
+    if (live) { sheetLink.target = '_blank'; sheetLink.rel = 'noopener'; }
+    else { sheetLink.removeAttribute('target'); sheetLink.removeAttribute('rel'); }
+    const label = sheetLink.querySelector('[data-i18n]');
+    label.dataset.i18n = live ? 'source.openSheet' : 'source.open';
+    label.textContent = t(label.dataset.i18n, { tab: site.tab });
+  }
+  document.querySelectorAll('.text-link:not(.sheet-link)').forEach((link) => {
+    const href = live ? site.sheetUrl : site.snapshotCsvUrl;
     link.hidden = !href;
     if (!href) return;
     link.href = href;
@@ -888,9 +901,7 @@ function updateSourceLinks() {
     else { link.removeAttribute('target'); link.removeAttribute('rel'); }
     const label = link.querySelector('[data-i18n]');
     if (label) {
-      label.dataset.i18n = link.classList.contains('source-link')
-        ? (live ? 'source.openSheet' : 'source.open')
-        : (live ? 'history.openSheet' : 'history.openAll');
+      label.dataset.i18n = live ? 'history.openSheet' : 'history.openAll';
       label.textContent = t(label.dataset.i18n, { tab: site.tab });
     }
   });
@@ -899,7 +910,7 @@ function updateSourceLinks() {
 function renderSiteTabs() {
   document.querySelectorAll('#site-tabs [data-site]').forEach((tab) => {
     const site = SITES.find((entry) => entry.id === tab.dataset.site);
-    const data = csvData(site, appState.sites.get(site.id));
+    const data = appState.sites.get(site.id);
     const selected = site.id === appState.site.id;
     tab.setAttribute('aria-selected', String(selected));
     tab.tabIndex = selected ? 0 : -1;
@@ -935,7 +946,6 @@ function renderCurrentSite() {
     if (bed) openBedSheet(bed, classifyBed(bed));
   }
   renderDataAlert();
-  renderCsvEditor();
 }
 
 function resetSelection() {
@@ -1119,22 +1129,6 @@ function initialize() {
   setupLanguageSwitcher();
   setupSiteTabs();
   setupMobileControls();
-  setupCsvEditor({
-    getSite: () => appState.site,
-    getData: (site) => appState.sites.get(site.id) || { status: 'loading' },
-    getToday: nairobiTodayIso,
-    onPreview: (id) => {
-      const bed = appState.bedById.get(id);
-      if (!bed) return;
-      selectBed(id);
-      if (isMobileLayout()) openBedSheet(bed, classifyBed(bed));
-      else {
-        closeBedSheet();
-        document.querySelector(`[data-bed-group="${id}"]`)?.focus({ preventScroll: true });
-      }
-    },
-    onChange: renderCurrentSite
-  });
   renderCurrentSite();
   // All three tabs load in parallel so the header can show each site's beds in use.
   SITES.forEach((site) => {
