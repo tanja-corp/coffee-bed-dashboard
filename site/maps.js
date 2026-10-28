@@ -77,20 +77,21 @@ function shahLayout() {
     layout.push({ bed: 54 + index, x: 155, y, width: 190, height: 16, rotation: 0 });
   }
   layout.push(column(65, 124, 252, 250, 14, 0));
-  layout.push(column(null, 143, 252, 250, 14, 0));
+  layout.push(column(86, 143, 252, 250, 14, 0));
   layout.push(column(66, 645, 250, 240, 15, 0));
   layout.push(column(69, 670, 250, 240, 15, 0));
   layout.push(column(67, 695, 250, 240, 15, 0));
-  layout.push(row(71, 460, 105, 190, 16, 0));
+  // One continuous footprint: 68 is the left half and 71 the right half.
+  layout.push(row(68, 412.5, 105, 95, 16, 0));
+  layout.push(row(71, 507.5, 105, 95, 16, 0));
   layout.push(row(72, 881, 445, 72, 14, 0));
-  // East: two horizontal lines of six long vertical beds, then a second 75 below.
+  // East: two horizontal lines of six long vertical beds, then 85 below.
   [73, 79].forEach((first, group) => {
     for (let col = 0; col < 6; col += 1) {
       layout.push({ bed: first + col, x: 842 + col * 24, y: 480 + group * 155, width: 18, height: 120, rotation: 0 });
     }
   });
-  layout.push({ bed: 75, x: 875, y: 795, width: 72, height: 15, rotation: 0 });
-  layout.push({ bed: 68, x: 960, y: 944, width: 72, height: 14, rotation: 0, unlocated: true });
+  layout.push({ bed: 85, x: 875, y: 795, width: 72, height: 15, rotation: 0 });
   return layout;
 }
 
@@ -99,7 +100,6 @@ function drawShah(map, t) {
   svgElement('path', { d: 'M116 48 L704 39 L985 118 L1040 890 L820 970 L205 970 L94 900 Z', class: 'site-boundary' }, map);
   svgElement('path', { d: 'M111 49 L704 40 L984 118 L1039 889 L820 969 L205 969 L95 899 Z', class: 'site-boundary-line' }, map);
   northArrow(map, t, 74, 74);
-  svgElement('rect', { x: 946, y: 930, width: 100, height: 42, rx: 5, class: 'tray' }, map);
   addText(map, t('map.zoneNorth'), 155, 67, 'zone-label');
   addText(map, t('map.zoneNortheast'), 630, 100, 'zone-label');
   addText(map, t('map.zoneWestUpper'), 130, 440, 'zone-label');
