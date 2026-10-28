@@ -867,6 +867,8 @@ function compactRanges(numbers) {
 }
 
 function updateSourceLinks() {
+  // Clear controls left by an older cached editor script before showing read-only links.
+  document.querySelector('#csv-file-controls')?.remove();
   const data = appState.sites.get(appState.site.id) || {};
   const site = appState.site;
   const live = Boolean(data.live || (!data.snapshotAvailable && site.sheetUrl));
